@@ -1,0 +1,8 @@
+#include "Base.xcconfig"
+
+// TODO: 도메인 확정(결정 D3) 후 교체
+API_BASE_URL = https:/$()/app.example.com/api/v1
+
+INFOPLIST_FILE = Config/Info-Release.plist
+
+#include? "Local.xcconfig"

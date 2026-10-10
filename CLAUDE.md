@@ -19,6 +19,16 @@
 - design.md의 토큰(`{colors.*}`, `{typography.*}`, `{rounded.*}`)은 Swift에서 디자인 토큰(Color/Font/CGFloat 상수)으로 한 곳에 정의해 재사용한다. 화면 코드에 hex·숫자 하드코딩 금지.
 - 웹 기준 수치(px, breakpoint)는 iOS(pt, Dynamic Type, safe area)에 맞게 옮긴다.
 
+## 코드
+
+- Xcode 프로젝트 `SkinCare.xcodeproj` (폴더 동기화 방식 — `SkinCare/`, `SkinCareTests/` 안에 파일을 추가하면 자동 포함, pbxproj 수정 불필요). iOS 17+, Swift 6, SwiftUI.
+- 구조는 README "구조" 참고. 디자인 토큰: `SkinCare/DesignSystem/`, API: `SkinCare/Networking/Endpoints.swift`, 고정 문구: `SkinCare/App/AppCopy.swift`.
+- 빌드 설정: `Config/*.xcconfig` (API 주소 등). 개인 값은 `Config/Local.xcconfig`(커밋 안 됨).
+- 빌드·테스트: `xcodebuild test -project SkinCare.xcodeproj -scheme SkinCare -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max'`
+- 화면 모델은 `@MainActor @Observable`, API 모델은 `Sendable`. 서버 열거형은 `UnknownCaseDecodable`로 모르는 값을 `unknown`으로 받는다.
+- 화면 문구는 화면 설계서 §4 문구 규칙(진단·치료·질환명 금지)을 지킨다. 고민 표기는 `Concern.displayLabel`만 쓰고 서버 label은 화면에 쓰지 않는다.
+- 브랜치: `develop`에서 `feat/`·`fix/`·`chore/` 분기 (협업 규칙 §2). 커밋 메시지는 `<타입>: <한국어 요약>`.
+
 ## 문서 위치
 
 | 경로 | 내용 |

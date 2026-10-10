@@ -40,3 +40,6 @@ Secrets.xcconfig
 
 # 개인 자료 (커밋 금지)
 private/
+
+# Xcode 개인 설정 (팀 ID, 실기기용 API 주소)
+Config/Local.xcconfig

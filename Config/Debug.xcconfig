@@ -1,0 +1,10 @@
+#include "Base.xcconfig"
+
+// 시뮬레이터 → 맥의 로컬 백엔드. 실기기는 Local.xcconfig에서 맥 LAN IP로 덮어쓴다.
+// xcconfig에서 "//"는 주석이라 "/$()/"로 끊어 쓴다.
+API_BASE_URL = http:/$()/localhost:3000/api/v1
+
+// 로컬 HTTP 허용(ATS NSAllowsLocalNetworking)은 Debug plist에만 있다.
+INFOPLIST_FILE = Config/Info-Debug.plist
+
+#include? "Local.xcconfig"

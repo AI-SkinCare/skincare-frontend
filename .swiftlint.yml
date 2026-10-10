@@ -1,0 +1,35 @@
+included:
+  - SkinCare
+  - SkinCareTests
+
+line_length:
+  warning: 120
+  error: 160
+  ignores_urls: true
+  ignores_comments: true
+
+type_body_length:
+  warning: 300
+file_length:
+  warning: 500
+identifier_name:
+  excluded: [id, x, y]
+nesting:
+  type_level: 2
+
+disabled_rules:
+  - trailing_comma
+  - todo
+
+opt_in_rules:
+  - force_unwrapping
+  - empty_count
+  - sorted_imports
+
+custom_rules:
+  no_hex_color_in_views:
+    name: "디자인 토큰 사용"
+    message: "화면 코드에서 Color(hex:)를 직접 쓰지 말고 DesignSystem/Colors.swift 토큰을 쓰세요."
+    included: "SkinCare/Features/.*"
+    regex: "Color\\(hex:"
+    severity: warning

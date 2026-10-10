@@ -319,3 +319,31 @@ The system is essentially shadow-free: no drop shadows appear on any card, butto
 - Don't put borders on form fields at rest — inputs are `{colors.field}` tint fills; the border appears only as the 2px ink focus ring.
 - Don't let full-color photography of people into the curator/juror grids; portraits are strictly black-and-white.
 - Don't square off pill geometry at small sizes — badges, chips, and toggles stay stadium-shaped.
+
+## App Additions (skincare iOS)
+
+웹 레퍼런스 기반 시스템을 iOS 앱에 적용하면서 추가·변경한 항목. 구현: `SkinCare/DesignSystem/`. 근거: `docs/patch/01_swift-ios-patch.md` §2 §5.
+
+### Font
+
+- **Pretendard** (앱 번들, OFL). Saans는 상용·한글 미지원이고, Pretendard의 라틴 글리프는 위에서 권장한 대체 폰트 Inter 기반이다.
+- 굵기 매핑: 652 → Bold, 600 → SemiBold, 456 → Medium, 300 → Light. 크기는 pt, Dynamic Type을 따른다.
+- 웹 히어로용 `display`(80) · `heading-2`(44)는 쓰지 않는다. `heading-1`(56)은 종합 점수 숫자에만 쓴다.
+
+### Semantic — Grade
+
+측정 등급(화면 설계서 §5)과 추이 화살표에만 쓰는 상태 색. 넓은 면적·배경에는 쓰지 않고, 항상 글자 라벨과 함께 쓴다.
+
+| Token | Hex | Use |
+| --- | --- | --- |
+| `{colors.grade-good}` | #1E9E5A | 양호 · 추이 ▲ 좋아짐 |
+| `{colors.grade-normal}` | #E0A400 | 보통 |
+| `{colors.grade-care}` | #EE6A1F | 관리 필요 · 추이 ▼ 나빠짐 |
+
+### Components
+
+- **Notice banner** — 화면 설계서의 "노란 배너"는 `{colors.canvas-soft}` 카드 + 아이콘으로 대체 (색 띠 금지 원칙).
+- **Demo badge** — "데모 값" 배지는 실측처럼 보이면 안 되므로 `{colors.ink}` 채움 pill + `{colors.on-primary}` 라벨.
+- **Grade tag** — 8pt 등급 색 점 + `{typography.label}` 글자 라벨.
+- **Screen gutter** — 화면 좌우 여백 20pt.
+- **Dark mode** — 1차는 라이트 모드 고정.
