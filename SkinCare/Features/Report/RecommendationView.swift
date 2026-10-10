@@ -22,6 +22,7 @@ struct RecommendationView: View {
         .background(Color.canvas)
         .navigationTitle("맞춤 추천")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .task { await load() }
     }
 
@@ -36,11 +37,8 @@ struct RecommendationView: View {
 
     private func content(_ recommendation: Recommendation) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.xl) {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    SectionTitle(title: "피부 프로필")
-                    ProfileChips(recommendation: recommendation)
-                }
+            VStack(alignment: .leading, spacing: Spacing.xxl) {
+                SummaryHeader(recommendation: recommendation)
                 IngredientsSection(ingredients: recommendation.ingredients ?? [])
                 RoutineSection(steps: recommendation.routine ?? [])
                 ReasoningSection(paragraphs: recommendation.reasoning ?? [])
@@ -49,14 +47,33 @@ struct RecommendationView: View {
                 }
             }
             .padding(.horizontal, Spacing.screen)
-            .padding(.vertical, Spacing.lg)
+            .padding(.top, Spacing.sm)
+            .padding(.bottom, Spacing.xl)
         }
         .safeAreaInset(edge: .bottom) {
             DisclaimerText(text: recommendation.disclaimer)
                 .padding(.horizontal, Spacing.screen)
                 .padding(.vertical, Spacing.sm)
                 .background(Color.canvas)
-                .overlay(alignment: .top) { Rectangle().fill(Color.hairlineSoft).frame(height: 1) }
+                .overlay(alignment: .top) { Hairline() }
+        }
+    }
+}
+
+// MARK: - 요약 + 피부 프로필
+
+private struct SummaryHeader: View {
+    let recommendation: Recommendation
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            ProfileChips(recommendation: recommendation)
+            if let answer = recommendation.answer, !answer.isEmpty {
+                Text(answer)
+                    .appText(.bodyLarge)
+                    .foregroundStyle(.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }
@@ -68,25 +85,29 @@ private struct IngredientsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            SectionTitle(title: "추천 성분")
+            SectionTitle(title: "추천 성분", caption: ingredients.isEmpty ? nil : "우선순위 순")
             if ingredients.isEmpty {
                 Text("맞춤 성분을 찾지 못했어요. 추천 이유를 확인해 주세요.")
                     .appText(.bodySmall)
                     .foregroundStyle(.textMuted)
+                    .card(.soft, padding: Spacing.md, radius: Radius.sm)
             }
             ForEach(Array(ingredients.sorted { $0.priority < $1.priority }.enumerated()), id: \.element.id) { index, ingredient in
                 HStack(alignment: .top, spacing: Spacing.md) {
                     Text("\(index + 1)")
                         .appText(.link)
-                        .foregroundStyle(.onPrimary)
-                        .frame(width: 28, height: 28)
-                        .background(Color.ink, in: Circle())
+                        .foregroundStyle(index == 0 ? .onPrimary : .ink)
+                        .frame(width: 32, height: 32)
+                        .background(index == 0 ? Color.ink : Color.canvasSoft, in: Circle())
                     VStack(alignment: .leading, spacing: Spacing.xxs) {
                         Text(ingredient.name).appText(.link).foregroundStyle(.ink)
                         if let purpose = ingredient.purpose, !purpose.isEmpty {
                             Text(purpose).appText(.bodySmall).foregroundStyle(.textMuted)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
+                    .padding(.top, 5)
+                    Spacer(minLength: 0)
                 }
                 .card(.outlined, padding: Spacing.md, radius: Radius.sm)
                 .accessibilityElement(children: .combine)
@@ -108,43 +129,64 @@ private struct RoutineSection: View {
 
     var body: some View {
         if !steps.isEmpty {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
                 SectionTitle(title: "관리 루틴")
-                Picker("시간대", selection: $tab) {
-                    Text("아침").tag(RoutineTime.morning)
-                    Text("저녁").tag(RoutineTime.evening)
-                }
-                .pickerStyle(.segmented)
-
-                stepList(tab == .morning ? morning : evening)
+                PillSegmentedControl(options: [(RoutineTime.morning, "아침"), (RoutineTime.evening, "저녁")], selection: $tab)
+                RoutineTimeline(items: tab == .morning ? morning : evening)
+                    .id(tab)
+                    .transition(.opacity)
 
                 if !periodic.isEmpty {
-                    Text("주기 관리")
-                        .appText(.link)
-                        .foregroundStyle(.ink)
-                        .padding(.top, Spacing.xs)
-                    stepList(periodic)
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Text("주기 관리").appText(.label).foregroundStyle(.textMuted)
+                        ForEach(periodic) { item in
+                            HStack(spacing: Spacing.sm) {
+                                Image(systemName: "calendar").font(.system(size: 14)).foregroundStyle(.ink)
+                                Text(item.action).appText(.body).foregroundStyle(.ink)
+                            }
+                        }
+                    }
+                    .card(.soft, padding: Spacing.md, radius: Radius.sm)
                 }
             }
         }
     }
+}
 
-    @ViewBuilder
-    private func stepList(_ items: [RoutineStep]) -> some View {
+private struct RoutineTimeline: View {
+    let items: [RoutineStep]
+
+    var body: some View {
         if items.isEmpty {
             Text("이 시간대에는 따로 할 일이 없어요.")
                 .appText(.bodySmall)
                 .foregroundStyle(.textMuted)
         } else {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                ForEach(Array(items.sorted { $0.step < $1.step }.enumerated()), id: \.element.id) { index, item in
-                    HStack(alignment: .top, spacing: Spacing.sm) {
-                        Text("\(index + 1)").appText(.link).foregroundStyle(.textMuted).frame(width: 20)
-                        Text(item.action).appText(.body).foregroundStyle(.ink)
+            let sorted = items.sorted { $0.step < $1.step }
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(sorted.enumerated()), id: \.element.id) { index, item in
+                    HStack(alignment: .top, spacing: Spacing.md) {
+                        VStack(spacing: 0) {
+                            Text("\(index + 1)")
+                                .appText(.label)
+                                .foregroundStyle(.ink)
+                                .frame(width: 26, height: 26)
+                                .overlay(Circle().strokeBorder(Color.ink, lineWidth: 1.5))
+                            if index < sorted.count - 1 {
+                                Rectangle().fill(Color.hairline).frame(width: 1.5).frame(maxHeight: .infinity)
+                            }
+                        }
+                        Text(item.action)
+                            .appText(.body)
+                            .foregroundStyle(.ink)
+                            .padding(.top, 3)
+                            .padding(.bottom, Spacing.lg)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
                     }
+                    .accessibilityElement(children: .combine)
                 }
             }
-            .card(.soft, padding: Spacing.md, radius: Radius.sm)
         }
     }
 }
@@ -153,19 +195,23 @@ private struct RoutineSection: View {
 
 private struct ReasoningSection: View {
     let paragraphs: [String]
-    private let titles = ["① 피부 상태와 원인", "② 성분을 고른 이유", "③ 사용법과 관리"]
+    private let titles = ["피부 상태와 원인", "성분을 고른 이유", "사용법과 관리"]
 
     var body: some View {
         if !paragraphs.isEmpty {
-            VStack(alignment: .leading, spacing: Spacing.md) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
                 SectionTitle(title: "추천 이유")
                 ForEach(Array(paragraphs.enumerated()), id: \.offset) { index, paragraph in
-                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                        if index < titles.count {
-                            Text(titles[index]).appText(.link).foregroundStyle(.ink)
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        HStack(spacing: Spacing.xs) {
+                            Text("0\(index + 1)").appText(.label).foregroundStyle(.textFaint)
+                            if index < titles.count {
+                                Text(titles[index]).appText(.link).foregroundStyle(.ink)
+                            }
                         }
                         ExpandableText(text: paragraph)
                     }
+                    .card(.outlined, padding: Spacing.md, radius: Radius.sm)
                 }
             }
         }
@@ -178,15 +224,25 @@ private struct ExpandableText: View {
     @State private var isExpanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xxs) {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
             Text(text)
                 .appText(.body)
                 .foregroundStyle(.inkSoft)
                 .lineLimit(isExpanded ? nil : 3)
+                .fixedSize(horizontal: false, vertical: true)
             if text.count > 80 {
-                Button(isExpanded ? "접기" : "더 보기") { withAnimation { isExpanded.toggle() } }
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
+                } label: {
+                    HStack(spacing: 2) {
+                        Text(isExpanded ? "접기" : "더 보기")
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                    }
                     .appText(.bodySmall)
                     .foregroundStyle(.textMuted)
+                }
             }
         }
     }
@@ -199,18 +255,34 @@ private struct AssumptionsSection: View {
     @State private var isExpanded = false
 
     var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                ForEach(notes, id: \.self) { note in
-                    Text("· \(note)").appText(.bodySmall).foregroundStyle(.textMuted)
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
+            } label: {
+                HStack {
+                    Text("이렇게 가정했어요").appText(.link).foregroundStyle(.ink)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.textMuted)
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
                 }
+                .frame(minHeight: ControlSize.minTouch)
+                .contentShape(Rectangle())
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, Spacing.xs)
-        } label: {
-            Text("이렇게 가정했어요").appText(.link).foregroundStyle(.ink)
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    ForEach(notes, id: \.self) { note in
+                        Text("· \(note)").appText(.bodySmall).foregroundStyle(.textMuted)
+                    }
+                }
+                .padding(.bottom, Spacing.sm)
+                .transition(.opacity)
+            }
         }
-        .tint(.ink)
-        .card(.soft, padding: Spacing.md, radius: Radius.sm)
+        .padding(.horizontal, Spacing.md)
+        .background(Color.canvasSoft, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
     }
 }

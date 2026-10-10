@@ -14,12 +14,75 @@ extension View {
         self
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(style == .soft ? Color.canvasSoft : Color.canvas, in: RoundedRectangle(cornerRadius: radius))
+            .background(style == .soft ? Color.canvasSoft : Color.canvas, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay {
                 if style == .outlined {
-                    RoundedRectangle(cornerRadius: radius).strokeBorder(Color.hairlineSoft, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Color.hairlineSoft, lineWidth: 1)
                 }
             }
+    }
+}
+
+// MARK: - 브랜드
+
+/// 앱 아이콘 squircle (design.md `app-icon-squircle`, 30% radius)
+struct BrandMark: View {
+    var size: CGFloat = 56
+
+    var body: some View {
+        Image("BrandMark")
+            .resizable()
+            .interpolation(.high)
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.3, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: size * 0.3, style: .continuous).strokeBorder(Color.hairlineSoft, lineWidth: 1))
+            .accessibilityHidden(true)
+    }
+}
+
+/// 화면 상단 제목 + 가벼운 부제. 제목은 마침표로 끝나는 문장 (design.md §Principles).
+struct ScreenHeader: View {
+    let title: String
+    var subtitle: String?
+    var eyebrow: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            if let eyebrow {
+                Text(eyebrow).appText(.bodySmall).foregroundStyle(.textMuted)
+            }
+            Text(title)
+                .appText(.heading3)
+                .foregroundStyle(.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            if let subtitle {
+                Text(subtitle)
+                    .appText(.bodyLarge)
+                    .foregroundStyle(.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+struct SectionTitle: View {
+    let title: String
+    var caption: String?
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .appText(.title)
+                .foregroundStyle(.ink)
+            Spacer()
+            if let caption {
+                Text(caption).appText(.caption).foregroundStyle(.textMuted)
+            }
+        }
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -50,14 +113,14 @@ struct AppTextField: View {
         .appText(.body)
         .foregroundStyle(.ink)
         .focused($isFocused)
-        .padding(.vertical, Spacing.sm)
         .padding(.horizontal, Spacing.md)
         .frame(minHeight: ControlSize.buttonHeight)
-        .background(Color.field, in: RoundedRectangle(cornerRadius: Radius.sm))
+        .background(Color.field, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: Radius.sm)
+            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                 .strokeBorder(Color.ink, lineWidth: isFocused ? 2 : 0)
         }
+        .animation(.easeOut(duration: 0.15), value: isFocused)
     }
 
     private var prompt: Text {
@@ -67,7 +130,7 @@ struct AppTextField: View {
 
 // MARK: - 칩 · 배지
 
-/// 고민 칩 등. 선택형이면 선택 시 ink 채움.
+/// 고민 칩 등 표시용 칩
 struct Chip: View {
     let title: String
     var isSelected = false
@@ -77,7 +140,7 @@ struct Chip: View {
             .appText(.label)
             .foregroundStyle(isSelected ? .onPrimary : .ink)
             .padding(.horizontal, Spacing.sm)
-            .padding(.vertical, Spacing.xs)
+            .padding(.vertical, 6)
             .background(isSelected ? Color.ink : Color.canvasSoft, in: Capsule())
     }
 }
@@ -86,19 +149,32 @@ struct Chip: View {
 struct ChoiceChip: View {
     let title: String
     let isSelected: Bool
+    var isFullWidth = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Text(title)
-                .appText(.bodySmall)
+                .appText(isSelected ? .link : .body)
                 .foregroundStyle(isSelected ? .onPrimary : .ink)
                 .padding(.horizontal, Spacing.md)
-                .frame(minHeight: ControlSize.minTouch)
+                .frame(maxWidth: isFullWidth ? .infinity : nil, minHeight: ControlSize.minTouch)
                 .background(isSelected ? Color.ink : Color.canvasSoft, in: Capsule())
+                .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle())
+        .animation(.easeOut(duration: 0.15), value: isSelected)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+/// 눌림 효과만 주는 버튼 스타일
+struct PressableStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
@@ -108,8 +184,8 @@ struct DemoBadge: View {
         Text("데모 값")
             .appText(.label)
             .foregroundStyle(.onPrimary)
-            .padding(.horizontal, Spacing.sm)
-            .padding(.vertical, Spacing.xxs)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
             .background(Color.ink, in: Capsule())
             .accessibilityLabel("데모 값, 실제 측정값이 아님")
     }
@@ -118,14 +194,163 @@ struct DemoBadge: View {
 /// 등급 점 + 글자 라벨. 색만으로 구분하지 않는다 (화면 설계서 §5).
 struct GradeTag: View {
     let grade: Grade
+    var isFilled = false
 
     var body: some View {
-        HStack(spacing: Spacing.xxs) {
-            Circle().fill(grade.color).frame(width: 8, height: 8)
+        HStack(spacing: 6) {
+            Circle().fill(grade.color).frame(width: 7, height: 7)
             Text(grade.label).appText(.label).foregroundStyle(.ink)
         }
+        .padding(.horizontal, isFilled ? 10 : 0)
+        .padding(.vertical, isFilled ? 5 : 0)
+        .background(isFilled ? Color.canvasSoft : Color.clear, in: Capsule())
         .accessibilityElement(children: .combine)
         .accessibilityLabel("등급 \(grade.label)")
+    }
+}
+
+// MARK: - 점수 시각화
+
+/// 종합 점수 링. ink 진행 + canvas-soft 트랙.
+struct ScoreRing: View {
+    let score: Int
+    var size: CGFloat = 196
+    var lineWidth: CGFloat = 12
+    var showsLabel = true
+
+    @State private var progress: CGFloat = 0
+
+    var body: some View {
+        let target = CGFloat(min(max(score, 0), 100)) / 100
+        ZStack {
+            Circle().stroke(Color.canvasSoft, lineWidth: lineWidth)
+            Circle()
+                .trim(from: 0, to: progress)
+                .stroke(Color.ink, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            if showsLabel {
+                VStack(spacing: 2) {
+                    Text("\(score)")
+                        .appText(.heading1)
+                        .foregroundStyle(.ink)
+                        .contentTransition(.numericText())
+                    Text("/ 100").appText(.caption).foregroundStyle(.textMuted)
+                }
+            } else {
+                Text("\(score)")
+                    .font(Font.custom("Pretendard-Bold", size: size * 0.32))
+                    .foregroundStyle(.ink)
+            }
+        }
+        .frame(width: size, height: size)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.8)) { progress = target }
+        }
+        .onChange(of: score) { withAnimation(.easeOut(duration: 0.4)) { progress = target } }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("종합 점수")
+        .accessibilityValue("100점 만점에 \(score)점")
+    }
+}
+
+/// 0–100 막대
+struct ProgressBar: View {
+    let value: Int
+    var color: Color = .ink
+    var height: CGFloat = 6
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.canvasSoft)
+                Capsule().fill(color)
+                    .frame(width: max(height, proxy.size.width * CGFloat(min(max(value, 0), 100)) / 100))
+            }
+        }
+        .frame(height: height)
+        .accessibilityHidden(true)
+    }
+}
+
+// MARK: - 세그먼트 (design.md `segmented-control`)
+
+/// canvas-soft 트랙 + 흰 pill 활성 옵션. 디자인 시스템에서 유일하게 그림자를 쓰는 요소.
+struct PillSegmentedControl<Value: Hashable>: View {
+    let options: [(value: Value, title: String)]
+    @Binding var selection: Value
+    @Namespace private var namespace
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(options, id: \.value) { option in
+                let isSelected = option.value == selection
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { selection = option.value }
+                } label: {
+                    Text(option.title)
+                        .appText(isSelected ? .link : .body)
+                        .foregroundStyle(isSelected ? .ink : .textMuted)
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .background {
+                            if isSelected {
+                                Capsule()
+                                    .fill(Color.canvas)
+                                    .shadow(color: .black.opacity(0.08), radius: 4, y: 1)
+                                    .matchedGeometryEffect(id: "segment", in: namespace)
+                            }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .background(Color.canvasSoft, in: Capsule())
+    }
+}
+
+// MARK: - 리스트 행
+
+/// 설정·메뉴 행. 카드 안에서 hairline으로 구분한다.
+struct MenuRow<Trailing: View>: View {
+    let title: String
+    var systemImage: String?
+    var role: ButtonRole?
+    let action: () -> Void
+    @ViewBuilder var trailing: Trailing
+
+    var body: some View {
+        Button(role: role, action: action) {
+            HStack(spacing: Spacing.sm) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(role == .destructive ? .gradeCare : .ink)
+                        .frame(width: 24)
+                }
+                Text(title)
+                    .appText(.body)
+                    .foregroundStyle(role == .destructive ? .gradeCare : .ink)
+                Spacer()
+                trailing
+            }
+            .frame(minHeight: 52)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+extension MenuRow where Trailing == EmptyView {
+    init(title: String, systemImage: String? = nil, role: ButtonRole? = nil, action: @escaping () -> Void) {
+        self.init(title: title, systemImage: systemImage, role: role, action: action) { EmptyView() }
+    }
+}
+
+struct Hairline: View {
+    var body: some View {
+        Rectangle().fill(Color.hairlineSoft).frame(height: 1)
     }
 }
 
@@ -137,15 +362,19 @@ struct NoticeBanner: View {
     var systemImage = "exclamationmark.circle"
 
     var body: some View {
-        HStack(alignment: .top, spacing: Spacing.xs) {
+        HStack(alignment: .top, spacing: Spacing.sm) {
             Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.ink)
+                .padding(.top, 1)
             Text(message)
                 .appText(.bodySmall)
                 .foregroundStyle(.ink)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .card(.soft, padding: Spacing.md, radius: Radius.sm)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -154,10 +383,17 @@ struct DisclaimerText: View {
     var text: String?
 
     var body: some View {
-        Text(text ?? AppCopy.disclaimer)
-            .appText(.caption)
-            .foregroundStyle(.textMuted)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        HStack(alignment: .top, spacing: Spacing.xs) {
+            Image(systemName: "info.circle")
+                .font(.system(size: 12, weight: .medium))
+                .padding(.top, 2)
+            Text(text ?? AppCopy.disclaimer)
+                .appText(.caption)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(.textMuted)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -171,12 +407,39 @@ struct LoadingStateView: View {
     }
 }
 
+struct EmptyStateView: View {
+    let systemImage: String
+    let title: String
+    var message: String?
+
+    var body: some View {
+        VStack(spacing: Spacing.sm) {
+            Image(systemName: systemImage)
+                .font(.system(size: 28, weight: .light))
+                .foregroundStyle(.ink)
+                .frame(width: 64, height: 64)
+                .background(Color.canvasSoft, in: Circle())
+            Text(title).appText(.title).foregroundStyle(.ink)
+            if let message {
+                Text(message).appText(.bodySmall).foregroundStyle(.textMuted).multilineTextAlignment(.center)
+            }
+        }
+        .padding(Spacing.lg)
+        .frame(maxWidth: .infinity)
+    }
+}
+
 struct ErrorStateView: View {
     let message: String
     let retry: () -> Void
 
     var body: some View {
         VStack(spacing: Spacing.md) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: 24, weight: .light))
+                .foregroundStyle(.ink)
+                .frame(width: 56, height: 56)
+                .background(Color.canvasSoft, in: Circle())
             Text(message)
                 .appText(.body)
                 .foregroundStyle(.textMuted)
@@ -186,17 +449,6 @@ struct ErrorStateView: View {
         }
         .padding(Spacing.lg)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-struct SectionTitle: View {
-    let title: String
-
-    var body: some View {
-        Text(title)
-            .appText(.title)
-            .foregroundStyle(.ink)
-            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -246,5 +498,31 @@ struct FlowLayout: Layout {
             rows[rows.count - 1] = row
         }
         return rows
+    }
+}
+
+// MARK: - 탭 제목
+
+/// 탭 루트 화면(홈·이력·마이) 상단 제목. 시스템 큰 제목 대신 직접 그려 Pretendard로 통일한다.
+struct TabHeader<Trailing: View>: View {
+    let title: String
+    @ViewBuilder var trailing: Trailing
+
+    var body: some View {
+        HStack(alignment: .center) {
+            Text(title)
+                .font(Font.custom("Pretendard-Bold", size: 30, relativeTo: .largeTitle))
+                .foregroundStyle(.ink)
+                .accessibilityAddTraits(.isHeader)
+            Spacer()
+            trailing
+        }
+        .frame(minHeight: 52)
+    }
+}
+
+extension TabHeader where Trailing == EmptyView {
+    init(title: String) {
+        self.init(title: title) { EmptyView() }
     }
 }

@@ -9,11 +9,16 @@ struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .appText(.link)
-            .foregroundStyle(isEnabled ? .onPrimary : .textFaint)
+            .foregroundStyle(isEnabled ? .onPrimary : .textMuted)
             .frame(maxWidth: .infinity, minHeight: ControlSize.buttonHeight)
             .padding(.horizontal, Spacing.md)
-            .background(isEnabled ? Color.ink : Color.canvasSoft, in: Capsule())
-            .opacity(configuration.isPressed ? 0.8 : 1)
+            // 비활성: canvas-soft 카드 위에서도 보이도록 hairline 채움
+            .background(isEnabled ? Color.ink : Color.hairline, in: Capsule())
+            .contentShape(Capsule())
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .opacity(configuration.isPressed ? 0.88 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.2), value: isEnabled)
     }
 }
 
@@ -27,22 +32,29 @@ struct OutlineButtonStyle: ButtonStyle {
             .foregroundStyle(isEnabled ? .ink : .textFaint)
             .frame(maxWidth: .infinity, minHeight: ControlSize.buttonHeight)
             .padding(.horizontal, Spacing.md)
-            .background(Color.canvas, in: Capsule())
+            .background(configuration.isPressed ? Color.canvasSoft : Color.canvas, in: Capsule())
             .overlay(Capsule().strokeBorder(Color.hairline, lineWidth: 1))
-            .opacity(configuration.isPressed ? 0.7 : 1)
+            .contentShape(Capsule())
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
-/// `button-pill-soft`: canvas-soft 채움, 테두리 없음. 작은 보조 링크 버튼.
+/// `button-pill-soft`: canvas-soft 채움, 테두리 없음. 작은 보조 버튼.
 struct SoftPillButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .appText(.link)
-            .foregroundStyle(.ink)
+            .foregroundStyle(isEnabled ? .ink : .textFaint)
             .padding(.horizontal, Spacing.md)
             .frame(minHeight: ControlSize.minTouch)
             .background(Color.canvasSoft, in: Capsule())
-            .opacity(configuration.isPressed ? 0.7 : 1)
+            .contentShape(Capsule())
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.8 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
@@ -56,4 +68,20 @@ extension ButtonStyle where Self == OutlineButtonStyle {
 
 extension ButtonStyle where Self == SoftPillButtonStyle {
     static var softPill: SoftPillButtonStyle { SoftPillButtonStyle() }
+}
+
+/// 화면 하단 고정 CTA 영역 (스크롤 콘텐츠 위에 흰 바탕 + hairline)
+struct BottomActionBar<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(spacing: Spacing.sm) {
+            content
+        }
+        .padding(.horizontal, Spacing.screen)
+        .padding(.top, Spacing.sm)
+        .padding(.bottom, Spacing.xs)
+        .background(Color.canvas)
+        .overlay(alignment: .top) { Hairline() }
+    }
 }

@@ -10,44 +10,39 @@ struct CaptureView: View {
     private let cameraAvailable = UIImagePickerController.isSourceTypeAvailable(.camera)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            Text("얼굴 사진을 준비해 주세요.")
-                .appText(.heading4)
-                .foregroundStyle(.ink)
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                CaptureStepIndicator(current: 0)
+                ScreenHeader(title: "얼굴 사진을 준비해 주세요.",
+                             subtitle: model.image == nil ? "정면 얼굴이 잘 보이는 사진 한 장이면 돼요." : "이 사진으로 측정할게요.")
 
-            if let reason = model.retakeReason {
-                NoticeBanner(message: reason)
-            }
-            if !model.aiAvailable {
-                NoticeBanner(message: AppCopy.serverMaintenance)
-            }
-
-            preview
-
-            if let error = model.imageError {
-                Text(error)
-                    .appText(.bodySmall)
-                    .foregroundStyle(.gradeCare)
-            }
-
-            HStack(spacing: Spacing.sm) {
-                if cameraAvailable {
-                    Button(model.image == nil ? "촬영하기" : "다시 찍기") { showsCamera = true }
-                        .buttonStyle(.outline)
+                if let reason = model.retakeReason {
+                    NoticeBanner(message: reason, systemImage: "arrow.counterclockwise")
                 }
-                let albumTitle = model.image == nil ? "앨범에서 선택" : "다른 사진 선택"
-                PhotosPicker(selection: $pickerItem, matching: .images, photoLibrary: .shared()) {
-                    Text(albumTitle)
+                if !model.aiAvailable {
+                    NoticeBanner(message: AppCopy.serverMaintenance, systemImage: "wrench.and.screwdriver")
                 }
-                .buttonStyle(.outline)
-            }
 
-            Button("다음") { model.path.append(.survey) }
-                .buttonStyle(.primary)
-                .disabled(model.image == nil || !model.aiAvailable)
+                preview
+
+                if let error = model.imageError {
+                    Label(error, systemImage: "exclamationmark.circle")
+                        .appText(.bodySmall)
+                        .foregroundStyle(.gradeCare)
+                }
+
+                sourceButtons
+            }
+            .padding(.horizontal, Spacing.screen)
+            .padding(.vertical, Spacing.xs)
         }
-        .padding(.horizontal, Spacing.screen)
-        .padding(.bottom, Spacing.md)
+        .safeAreaInset(edge: .bottom) {
+            BottomActionBar {
+                Button("다음") { model.path.append(.survey) }
+                    .buttonStyle(.primary)
+                    .disabled(model.image == nil || !model.aiAvailable)
+            }
+        }
         .background(Color.canvas)
         .navigationBarTitleDisplayMode(.inline)
         .captureCloseButton()
@@ -72,28 +67,59 @@ struct CaptureView: View {
 
     private var preview: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: Radius.md)
+            RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
                 .fill(Color.canvasSoft)
             if let image = model.previewImage {
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+                    .scaledToFill()
+                    .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
                     .accessibilityLabel("선택한 얼굴 사진 미리보기")
             } else if model.isProcessingImage {
                 ProgressView().tint(.ink)
             } else {
-                VStack(spacing: Spacing.xs) {
-                    Image(systemName: "person.crop.square")
-                        .font(.system(size: 48, weight: .light))
-                        .foregroundStyle(.textFaint)
-                    Text("정면 얼굴 사진 1장")
-                        .appText(.bodySmall)
-                        .foregroundStyle(.textMuted)
-                }
+                FaceGuide()
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .aspectRatio(4 / 5, contentMode: .fit)
+        .frame(maxWidth: .infinity)
+        .clipped()
+    }
+
+    private var sourceButtons: some View {
+        let albumTitle = model.image == nil ? "앨범에서 선택" : "다른 사진"
+        return HStack(spacing: Spacing.sm) {
+            if cameraAvailable {
+                Button { showsCamera = true } label: {
+                    Label(model.image == nil ? "촬영하기" : "다시 찍기", systemImage: "camera")
+                }
+                .buttonStyle(.outline)
+            }
+            PhotosPicker(selection: $pickerItem, matching: .images, photoLibrary: .shared()) {
+                Label(albumTitle, systemImage: "photo.on.rectangle")
+            }
+            .buttonStyle(.outline)
+        }
+    }
+}
+
+/// 사진이 없을 때 얼굴 위치 가이드
+private struct FaceGuide: View {
+    var body: some View {
+        VStack(spacing: Spacing.md) {
+            Ellipse()
+                .strokeBorder(Color.textFaint, style: StrokeStyle(lineWidth: 1.5, dash: [6, 6]))
+                .frame(width: 168, height: 224)
+                .overlay {
+                    Image(systemName: "face.smiling")
+                        .font(.system(size: 44, weight: .ultraLight))
+                        .foregroundStyle(.textFaint)
+                }
+            Text("얼굴이 이 안에 오도록 찍어 주세요")
+                .appText(.caption)
+                .foregroundStyle(.textMuted)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

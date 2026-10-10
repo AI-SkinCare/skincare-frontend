@@ -9,38 +9,36 @@ struct SurveyView: View {
 
     var body: some View {
         @Bindable var model = model
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.lg) {
-                    Text(step == 1 ? "기본 정보를 알려 주세요." : "생활 습관을 알려 주세요.")
-                        .appText(.heading4)
-                        .foregroundStyle(.ink)
-                    if step == 1 {
-                        SurveyStepOne(survey: $model.survey)
-                    } else {
-                        Text("모두 선택 사항이에요. 알려 주시면 추천에 반영돼요.")
-                            .appText(.bodySmall)
-                            .foregroundStyle(.textMuted)
-                        SurveyStepTwo(survey: $model.survey)
-                    }
-                }
-                .padding(.horizontal, Spacing.screen)
-                .padding(.bottom, Spacing.lg)
-            }
-            .scrollDismissesKeyboard(.interactively)
-
-            Group {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.xl) {
+                CaptureStepIndicator(current: 1)
                 if step == 1 {
-                    Button("다음") { withAnimation { step = 2 } }
+                    ScreenHeader(title: "기본 정보를 알려 주세요.", subtitle: "추천 성분을 고르는 데 쓰여요.")
+                    SurveyStepOne(survey: $model.survey)
+                        .transition(.asymmetric(insertion: .move(edge: .leading).combined(with: .opacity), removal: .opacity))
+                } else {
+                    ScreenHeader(title: "생활 습관을 알려 주세요.", subtitle: "모두 선택 사항이에요. 알려 주시면 추천이 더 정확해져요.")
+                    SurveyStepTwo(survey: $model.survey)
+                        .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
+                }
+            }
+            .padding(.horizontal, Spacing.screen)
+            .padding(.top, Spacing.xs)
+            .padding(.bottom, Spacing.lg)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .safeAreaInset(edge: .bottom) {
+            BottomActionBar {
+                if step == 1 {
+                    Button("다음") { withAnimation(.easeInOut(duration: 0.25)) { step = 2 } }
+                        .buttonStyle(.primary)
                         .disabled(!model.survey.hasRequiredFields)
                 } else {
                     Button("측정 시작") { Task { await model.submit(api: api, router: router) } }
+                        .buttonStyle(.primary)
                         .disabled(!model.canSubmit)
                 }
             }
-            .buttonStyle(.primary)
-            .padding(.horizontal, Spacing.screen)
-            .padding(.vertical, Spacing.sm)
         }
         .background(Color.canvas)
         .navigationBarTitleDisplayMode(.inline)
@@ -48,9 +46,11 @@ struct SurveyView: View {
         .toolbar {
             if step == 2 {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { withAnimation { step = 1 } } label: { Image(systemName: "chevron.left") }
-                        .foregroundStyle(.ink)
-                        .accessibilityLabel("이전 단계")
+                    Button { withAnimation(.easeInOut(duration: 0.25)) { step = 1 } } label: {
+                        Image(systemName: "chevron.left").font(.system(size: 16, weight: .semibold))
+                    }
+                    .foregroundStyle(.ink)
+                    .accessibilityLabel("이전 단계")
                 }
             }
         }
@@ -63,19 +63,25 @@ struct SurveyView: View {
 private struct SurveyStepOne: View {
     @Binding var survey: Survey
 
+    private let fourColumns = Array(repeating: GridItem(.flexible(), spacing: Spacing.xs), count: 4)
+
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.lg) {
+        VStack(alignment: .leading, spacing: Spacing.xl) {
             SurveyQuestion(title: "성별", isRequired: true) {
-                FlowLayout {
+                HStack(spacing: Spacing.xs) {
                     ForEach(Gender.knownCases, id: \.self) { gender in
-                        ChoiceChip(title: gender.label, isSelected: survey.gender == gender) { survey.gender = gender }
+                        ChoiceChip(title: gender.label, isSelected: survey.gender == gender, isFullWidth: true) {
+                            survey.gender = gender
+                        }
                     }
                 }
             }
             SurveyQuestion(title: "연령대", isRequired: true) {
-                FlowLayout {
+                LazyVGrid(columns: fourColumns, spacing: Spacing.xs) {
                     ForEach(AgeBand.knownCases, id: \.self) { band in
-                        ChoiceChip(title: band.label, isSelected: survey.ageBand == band) { survey.ageBand = band }
+                        ChoiceChip(title: band.label, isSelected: survey.ageBand == band, isFullWidth: true) {
+                            survey.ageBand = band
+                        }
                     }
                 }
             }
@@ -98,14 +104,16 @@ private struct SurveyStepTwo: View {
     @State private var productInput = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.lg) {
+        VStack(alignment: .leading, spacing: Spacing.xl) {
             SurveyQuestion(title: "하루 수면 시간") {
                 if let hours = survey.sleepHours {
-                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                        HStack {
-                            Text("\(hours)시간").appText(.link).foregroundStyle(.ink)
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("\(hours)").appText(.heading4).foregroundStyle(.ink)
+                                .contentTransition(.numericText())
+                            Text("시간").appText(.body).foregroundStyle(.textMuted)
                             Spacer()
-                            Button("지우기") { survey.sleepHours = nil }
+                            Button("지우기") { withAnimation { survey.sleepHours = nil } }
                                 .appText(.bodySmall)
                                 .foregroundStyle(.textMuted)
                         }
@@ -117,9 +125,14 @@ private struct SurveyStepTwo: View {
                         .tint(.ink)
                         .accessibilityValue("\(hours)시간")
                     }
+                    .card(.soft, padding: Spacing.md, radius: Radius.sm)
                 } else {
-                    Button("입력하기") { survey.sleepHours = 7 }
-                        .buttonStyle(.softPill)
+                    Button {
+                        withAnimation { survey.sleepHours = 7 }
+                    } label: {
+                        Label("입력하기", systemImage: "plus")
+                    }
+                    .buttonStyle(.softPill)
                 }
             }
 
@@ -127,7 +140,7 @@ private struct SurveyStepTwo: View {
             levelQuestion("자외선 노출", keyPath: \.sunExposureLevel)
             levelQuestion("스트레스", keyPath: \.stressLevel)
 
-            SurveyQuestion(title: "피부 고민", caption: "최대 \(Survey.maxConcerns)개") {
+            SurveyQuestion(title: "피부 고민", caption: "\(survey.concerns?.count ?? 0) / \(Survey.maxConcerns)") {
                 FlowLayout {
                     ForEach(Concern.knownCases, id: \.self) { concern in
                         let selected = survey.concerns?.contains(concern) == true
@@ -136,7 +149,7 @@ private struct SurveyStepTwo: View {
                 }
             }
 
-            SurveyQuestion(title: "사용 중인 제품", caption: "최대 \(Survey.maxProducts)개") {
+            SurveyQuestion(title: "사용 중인 제품", caption: "\(survey.currentProducts?.count ?? 0) / \(Survey.maxProducts)") {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     HStack(spacing: Spacing.xs) {
                         AppTextField(placeholder: "예: 수분크림", text: $productInput)
@@ -148,10 +161,10 @@ private struct SurveyStepTwo: View {
                     if let products = survey.currentProducts, !products.isEmpty {
                         FlowLayout {
                             ForEach(products, id: \.self) { product in
-                                Button { survey.currentProducts?.removeAll { $0 == product } } label: {
-                                    HStack(spacing: Spacing.xxs) {
+                                Button { withAnimation { survey.currentProducts?.removeAll { $0 == product } } } label: {
+                                    HStack(spacing: 6) {
                                         Text(product)
-                                        Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
+                                        Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
                                     }
                                     .appText(.label)
                                     .foregroundStyle(.ink)
@@ -159,7 +172,7 @@ private struct SurveyStepTwo: View {
                                     .padding(.vertical, Spacing.xs)
                                     .background(Color.canvasSoft, in: Capsule())
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(PressableStyle())
                                 .accessibilityLabel("\(product) 삭제")
                             }
                         }
@@ -167,12 +180,12 @@ private struct SurveyStepTwo: View {
                 }
             }
 
-            SurveyQuestion(title: "추가로 알려 주실 내용", caption: "\(survey.note?.count ?? 0)/\(Survey.maxNoteLength)") {
+            SurveyQuestion(title: "추가로 알려 주실 내용", caption: "\(survey.note?.count ?? 0) / \(Survey.maxNoteLength)") {
                 TextField("", text: noteBinding, prompt: Text("예: 여름에 번들거림이 심해요").foregroundStyle(.textFaint), axis: .vertical)
                     .lineLimit(3...6)
                     .appText(.body)
                     .padding(Spacing.md)
-                    .background(Color.field, in: RoundedRectangle(cornerRadius: Radius.sm))
+                    .background(Color.field, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
             }
         }
     }
@@ -181,7 +194,7 @@ private struct SurveyStepTwo: View {
         SurveyQuestion(title: title) {
             HStack(spacing: Spacing.xs) {
                 ForEach(Level.knownCases, id: \.self) { level in
-                    ChoiceChip(title: level.label, isSelected: survey[keyPath: keyPath] == level) {
+                    ChoiceChip(title: level.label, isSelected: survey[keyPath: keyPath] == level, isFullWidth: true) {
                         // 다시 누르면 선택 해제
                         survey[keyPath: keyPath] = survey[keyPath: keyPath] == level ? nil : level
                     }
@@ -207,7 +220,7 @@ private struct SurveyStepTwo: View {
         let product = String(productInput.trimmingCharacters(in: .whitespaces).prefix(Survey.maxProductLength))
         var products = survey.currentProducts ?? []
         if !products.contains(product) { products.append(product) }
-        survey.currentProducts = products
+        withAnimation { survey.currentProducts = products }
         productInput = ""
     }
 
@@ -230,11 +243,13 @@ private struct SurveyQuestion<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack(spacing: Spacing.xxs) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
                 Text(title).appText(.link).foregroundStyle(.ink)
-                if isRequired { Text("필수").appText(.caption).foregroundStyle(.textMuted) }
+                if isRequired {
+                    Text("필수").appText(.caption).foregroundStyle(.textMuted)
+                }
                 Spacer()
-                if let caption { Text(caption).appText(.caption).foregroundStyle(.textMuted) }
+                if let caption { Text(caption).appText(.caption).foregroundStyle(.textFaint) }
             }
             content
         }

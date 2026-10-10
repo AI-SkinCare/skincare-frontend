@@ -23,6 +23,7 @@ struct TrendView: View {
         .background(Color.canvas)
         .navigationTitle("이전 측정과 비교")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .task { await load() }
     }
 
@@ -39,35 +40,86 @@ struct TrendView: View {
     private func content(_ trend: Trend) -> some View {
         if let previous = trend.previous, let delta = trend.delta {
             ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.lg) {
-                    HStack {
-                        legend(color: .textFaint, title: "이전 \(Formatting.apiDate(previous.date))")
-                        legend(color: .ink, title: "현재 \(Formatting.apiDate(trend.current.date))")
-                    }
-                    TrendRow(title: "종합 점수", previous: previous.overallScore, current: trend.current.overallScore,
-                             delta: delta.overallScore, lowerIsBetter: false)
-                    ForEach(metrics, id: \.self) { metric in
-                        TrendRow(title: metric.displayName, previous: previous.summary[metric],
-                                 current: trend.current.summary[metric], delta: delta[metric],
-                                 lowerIsBetter: metric.lowerIsBetter)
+                VStack(alignment: .leading, spacing: Spacing.xl) {
+                    overall(previous: previous, current: trend.current, delta: delta.overallScore)
+
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        HStack {
+                            SectionTitle(title: "지표별 변화")
+                            legend(color: .hairline, title: "이전")
+                            legend(color: .ink, title: "현재")
+                        }
+                        ForEach(metrics, id: \.self) { metric in
+                            TrendRow(title: metric.displayName, previous: previous.summary[metric],
+                                     current: trend.current.summary[metric], delta: delta[metric],
+                                     lowerIsBetter: metric.lowerIsBetter)
+                        }
                     }
                 }
                 .padding(.horizontal, Spacing.screen)
-                .padding(.vertical, Spacing.lg)
+                .padding(.vertical, Spacing.md)
             }
         } else {
-            Text("비교할 이전 측정이 없습니다.")
-                .appText(.body)
+            EmptyStateView(systemImage: "chart.line.uptrend.xyaxis", title: "비교할 이전 측정이 없습니다.",
+                           message: "측정을 한 번 더 하면 변화를 볼 수 있어요.")
+                .frame(maxHeight: .infinity)
+        }
+    }
+
+    private func overall(previous: TrendPoint, current: TrendPoint, delta: Int) -> some View {
+        VStack(spacing: Spacing.md) {
+            Text("\(Formatting.apiDate(previous.date)) → \(Formatting.apiDate(current.date))")
+                .appText(.bodySmall)
                 .foregroundStyle(.textMuted)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            HStack(alignment: .center, spacing: Spacing.lg) {
+                scoreColumn(title: "이전", score: previous.overallScore, isCurrent: false)
+                Image(systemName: "arrow.right").font(.system(size: 18, weight: .medium)).foregroundStyle(.textFaint)
+                scoreColumn(title: "현재", score: current.overallScore, isCurrent: true)
+            }
+            DeltaBadge(delta: delta, lowerIsBetter: false, isLarge: true)
+        }
+        .frame(maxWidth: .infinity)
+        .card(.soft)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func scoreColumn(title: String, score: Int, isCurrent: Bool) -> some View {
+        VStack(spacing: 2) {
+            Text(title).appText(.caption).foregroundStyle(.textMuted)
+            Text("\(score)")
+                .appText(.heading3)
+                .foregroundStyle(isCurrent ? .ink : .textFaint)
         }
     }
 
     private func legend(color: Color, title: String) -> some View {
         HStack(spacing: Spacing.xxs) {
-            Capsule().fill(color).frame(width: 16, height: 6)
+            Capsule().fill(color).frame(width: 14, height: 6)
             Text(title).appText(.caption).foregroundStyle(.textMuted)
         }
+    }
+}
+
+/// 변화량 배지. 좋아짐 ▲ 초록, 나빠짐 ▼ 주황, 변화 없음 회색.
+private struct DeltaBadge: View {
+    let delta: Int
+    let lowerIsBetter: Bool
+    var isLarge = false
+
+    private var improved: Bool? {
+        guard delta != 0 else { return nil }
+        return lowerIsBetter ? delta < 0 : delta > 0
+    }
+
+    var body: some View {
+        Group {
+            switch improved {
+            case .some(true): Text("▲ \(abs(delta)) 좋아졌어요").foregroundStyle(.gradeGood)
+            case .some(false): Text("▼ \(abs(delta)) 나빠졌어요").foregroundStyle(.gradeCare)
+            case .none: Text("변화 없음").foregroundStyle(.textMuted)
+            }
+        }
+        .appText(isLarge ? .link : .label)
     }
 }
 
@@ -78,60 +130,32 @@ private struct TrendRow: View {
     let delta: Int
     let lowerIsBetter: Bool
 
-    private var improved: Bool? {
-        guard delta != 0 else { return nil }
-        return lowerIsBetter ? delta < 0 : delta > 0
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            HStack {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(alignment: .firstTextBaseline) {
                 Text(title).appText(.link).foregroundStyle(.ink)
                 if lowerIsBetter {
-                    Text("낮을수록 좋아요").appText(.caption).foregroundStyle(.textMuted)
+                    Text("낮을수록 좋아요").appText(.caption).foregroundStyle(.textFaint)
                 }
                 Spacer()
-                change
+                DeltaBadge(delta: delta, lowerIsBetter: lowerIsBetter)
             }
-            bar(value: previous, color: .textFaint)
+            bar(value: previous, color: .hairline)
             bar(value: current, color: .ink)
         }
         .card(.outlined, padding: Spacing.md, radius: Radius.sm)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
-        .accessibilityValue("이전 \(previous), 현재 \(current), \(changeDescription)")
-    }
-
-    @ViewBuilder
-    private var change: some View {
-        switch improved {
-        case .some(true):
-            Text("▲ \(abs(delta))").appText(.label).foregroundStyle(.gradeGood)
-        case .some(false):
-            Text("▼ \(abs(delta))").appText(.label).foregroundStyle(.gradeCare)
-        case .none:
-            Text("변화 없음").appText(.label).foregroundStyle(.textMuted)
-        }
-    }
-
-    private var changeDescription: String {
-        switch improved {
-        case .some(true): "\(abs(delta)) 좋아짐"
-        case .some(false): "\(abs(delta)) 나빠짐"
-        case .none: "변화 없음"
-        }
+        .accessibilityValue("이전 \(previous), 현재 \(current)")
     }
 
     private func bar(value: Int, color: Color) -> some View {
-        HStack(spacing: Spacing.xs) {
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.canvasSoft)
-                    Capsule().fill(color).frame(width: proxy.size.width * CGFloat(min(max(value, 0), 100)) / 100)
-                }
-            }
-            .frame(height: 8)
-            Text("\(value)").appText(.caption).foregroundStyle(.textMuted).frame(width: 28, alignment: .trailing)
+        HStack(spacing: Spacing.sm) {
+            ProgressBar(value: value, color: color, height: 8)
+            Text("\(value)")
+                .appText(.caption)
+                .foregroundStyle(color == .ink ? .ink : .textMuted)
+                .frame(width: 26, alignment: .trailing)
         }
     }
 }

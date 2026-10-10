@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 비로그인 화면 흐름: 로그인(SCR-01) → 회원가입(SCR-02)
 struct AuthFlowView: View {
-    @State private var showsSignup = false
+    @State private var showsSignup = Self.initialShowsSignup
     @State private var toast: String?
 
     var body: some View {
@@ -16,6 +16,14 @@ struct AuthFlowView: View {
                 }
         }
         .toast($toast)
+    }
+
+    private static var initialShowsSignup: Bool {
+        #if DEBUG
+        DebugLaunch.startScreen == .signup
+        #else
+        false
+        #endif
     }
 }
 
@@ -35,41 +43,87 @@ struct LoginView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("피부 상태를 숫자로 확인해요.")
-                        .appText(.heading3)
-                        .foregroundStyle(.ink)
-                    Text("사진 한 장으로 수분·탄력·색소침착·모공을 측정해요.")
-                        .appText(.bodyLarge)
-                        .foregroundStyle(.textMuted)
+        // 화면 가운데 정렬. 키보드가 올라와 공간이 줄면 스크롤된다.
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(spacing: Spacing.xl) {
+                    Spacer(minLength: 0)
+                    header
+                    form
+                    actions
+                    Spacer(minLength: 0)
+                    footnote
                 }
-                .padding(.top, Spacing.xxl)
+                .padding(.horizontal, Spacing.screen)
+                .padding(.vertical, Spacing.md)
+                .frame(maxWidth: .infinity, minHeight: proxy.size.height)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .scrollBounceBehavior(.basedOnSize)
+        }
+        .background(Color.canvas)
+        .toolbar(.hidden, for: .navigationBar)
+    }
 
-                VStack(spacing: Spacing.sm) {
-                    AppTextField(placeholder: "이메일", text: $email, keyboard: .emailAddress, contentType: .username)
-                    AppTextField(placeholder: "비밀번호", text: $password, isSecure: true, contentType: .password)
-                    if let errorMessage {
-                        Text(errorMessage)
-                            .appText(.bodySmall)
-                            .foregroundStyle(.gradeCare)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
+    private var header: some View {
+        VStack(spacing: Spacing.md) {
+            BrandMark(size: 72)
+            VStack(spacing: Spacing.xs) {
+                Text("피부를 숫자로 만나요.")
+                    .appText(.heading3)
+                    .foregroundStyle(.ink)
+                Text("사진 한 장으로 수분, 탄력,\n색소침착, 모공을 측정해요.")
+                    .appText(.bodyLarge)
+                    .foregroundStyle(.textMuted)
+            }
+            .multilineTextAlignment(.center)
+        }
+        .padding(.bottom, Spacing.xs)
+    }
 
-                VStack(spacing: Spacing.sm) {
-                    Button(isSubmitting ? "로그인 중…" : "로그인") { Task { await submit() } }
-                        .buttonStyle(.primary)
-                        .disabled(!canSubmit)
-                    Button("회원가입") { showsSignup = true }
-                        .buttonStyle(.outline)
+    private var form: some View {
+        VStack(spacing: Spacing.sm) {
+            AppTextField(placeholder: "이메일", text: $email, keyboard: .emailAddress, contentType: .username)
+            AppTextField(placeholder: "비밀번호", text: $password, isSecure: true, contentType: .password)
+            if let errorMessage {
+                Label(errorMessage, systemImage: "exclamationmark.circle")
+                    .appText(.bodySmall)
+                    .foregroundStyle(.gradeCare)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: errorMessage)
+    }
+
+    private var actions: some View {
+        VStack(spacing: Spacing.md) {
+            Button {
+                Task { await submit() }
+            } label: {
+                HStack(spacing: Spacing.xs) {
+                    if isSubmitting { ProgressView().tint(.onPrimary) }
+                    Text("로그인")
                 }
             }
-            .padding(.horizontal, Spacing.screen)
+            .buttonStyle(.primary)
+            .disabled(!canSubmit)
+
+            HStack(spacing: Spacing.xxs) {
+                Text("처음이신가요?").foregroundStyle(.textMuted)
+                Button("회원가입") { showsSignup = true }
+                    .foregroundStyle(.ink)
+                    .underline()
+            }
+            .appText(.bodySmall)
+            .frame(minHeight: ControlSize.minTouch)
         }
-        .scrollDismissesKeyboard(.interactively)
-        .background(Color.canvas)
+    }
+
+    private var footnote: some View {
+        Label(AppCopy.imageConsentShort, systemImage: "lock")
+            .appText(.caption)
+            .foregroundStyle(.textFaint)
     }
 
     private func submit() async {

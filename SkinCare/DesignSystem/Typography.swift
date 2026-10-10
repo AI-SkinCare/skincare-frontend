@@ -4,7 +4,7 @@ import SwiftUI
 /// 굵기 매핑: 652 → Bold, 600 → SemiBold, 456 → Medium, 300 → Light. 크기는 pt, Dynamic Type을 따른다.
 enum AppTextStyle {
     case heading1   // 56 / Bold / 1.0 — 종합 점수 숫자
-    case heading3   // 32 / Bold / 1.13 — 인증 화면 제목
+    case heading3   // 28 / Bold / 1.2 — 화면 대표 제목 (웹 32px를 모바일·한글 폭에 맞춤)
     case heading4   // 24 / Bold / 1.25 — 화면 제목
     case title      // 20 / SemiBold / 1.3 — 섹션 제목, 강조 행
     case bodyLarge  // 20 / Light / 1.38 — 리드 문단
@@ -17,7 +17,7 @@ enum AppTextStyle {
     fileprivate var spec: (font: String, size: CGFloat, lineHeight: CGFloat, relativeTo: Font.TextStyle) {
         switch self {
         case .heading1: ("Pretendard-Bold", 56, 1.0, .largeTitle)
-        case .heading3: ("Pretendard-Bold", 32, 1.13, .largeTitle)
+        case .heading3: ("Pretendard-Bold", 28, 1.2, .largeTitle)
         case .heading4: ("Pretendard-Bold", 24, 1.25, .title)
         case .title: ("Pretendard-SemiBold", 20, 1.3, .title3)
         case .bodyLarge: ("Pretendard-Light", 20, 1.38, .title3)

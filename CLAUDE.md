@@ -24,6 +24,7 @@
 - Xcode 프로젝트 `SkinCare.xcodeproj` (폴더 동기화 방식 — `SkinCare/`, `SkinCareTests/` 안에 파일을 추가하면 자동 포함, pbxproj 수정 불필요). iOS 17+, Swift 6, SwiftUI.
 - 구조는 README "구조" 참고. 디자인 토큰: `SkinCare/DesignSystem/`, API: `SkinCare/Networking/Endpoints.swift`, 고정 문구: `SkinCare/App/AppCopy.swift`.
 - 빌드 설정: `Config/*.xcconfig` (API 주소 등). 개인 값은 `Config/Local.xcconfig`(커밋 안 됨).
+- 백엔드 없이 화면 확인: Debug 실행 인자 `-MockAPI -StartScreen <이름>` (README "실행" 참고). UI를 바꾸면 시뮬레이터 스크린샷으로 확인한다.
 - 빌드·테스트: `xcodebuild test -project SkinCare.xcodeproj -scheme SkinCare -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max'`
 - 화면 모델은 `@MainActor @Observable`, API 모델은 `Sendable`. 서버 열거형은 `UnknownCaseDecodable`로 모르는 값을 `unknown`으로 받는다.
 - 화면 문구는 화면 설계서 §4 문구 규칙(진단·치료·질환명 금지)을 지킨다. 고민 표기는 `Concern.displayLabel`만 쓰고 서버 label은 화면에 쓰지 않는다.

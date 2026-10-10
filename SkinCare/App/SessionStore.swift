@@ -24,6 +24,12 @@ final class SessionStore {
     }
 
     func restore() async {
+        #if DEBUG
+        if [.login, .signup].contains(DebugLaunch.startScreen) {
+            state = .signedOut
+            return
+        }
+        #endif
         do {
             let session = try await api.tokens.refresh()
             state = .signedIn(session.user)

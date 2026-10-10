@@ -2,7 +2,11 @@ import SwiftUI
 
 @main
 struct SkinCareApp: App {
-    @State private var session = SessionStore(api: APIClient())
+    @State private var session = SessionStore(api: Self.makeAPIClient())
+
+    init() {
+        Appearance.apply()
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -11,6 +15,14 @@ struct SkinCareApp: App {
                 .environment(\.api, session.api)
                 .tint(.ink)
         }
+    }
+
+    private static func makeAPIClient() -> APIClient {
+        #if DEBUG
+        DebugLaunch.makeAPIClient()
+        #else
+        APIClient()
+        #endif
     }
 }
 
@@ -29,7 +41,7 @@ struct RootView: View {
             }
         }
         .background(Color.canvas)
-        .animation(.default, value: session.state)
+        .animation(.easeInOut(duration: 0.25), value: session.state)
         .task { await session.restore() }
         .task { await session.observeSessionExpiry() }
     }
@@ -37,13 +49,9 @@ struct RootView: View {
 
 private struct SplashView: View {
     var body: some View {
-        VStack(spacing: Spacing.md) {
-            Text("스킨케어")
-                .appText(.heading3)
-                .foregroundStyle(.ink)
-            ProgressView().tint(.ink)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        BrandMark(size: 88)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.canvas)
     }
 }
 

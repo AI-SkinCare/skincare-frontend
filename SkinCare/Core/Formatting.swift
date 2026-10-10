@@ -32,6 +32,28 @@ enum Formatting {
         )
     }
 
+    /// 10월 15일 목요일
+    static func dayWithWeekday(_ date: Date) -> String {
+        date.formatted(
+            Date.FormatStyle(locale: Locale(identifier: "ko_KR"), calendar: calendar, timeZone: kst)
+                .month().day().weekday(.wide)
+        )
+    }
+
+    /// 2026년 10월 (이력 그룹 제목)
+    static func yearMonth(_ date: Date) -> String {
+        date.formatted(
+            Date.FormatStyle(locale: Locale(identifier: "ko_KR"), calendar: calendar, timeZone: kst).year().month(.wide)
+        )
+    }
+
+    /// 10.15 (목)
+    static func shortDay(_ date: Date) -> String {
+        let day = date.formatted(Date.VerbatimFormatStyle(format: "\(month: .twoDigits).\(day: .twoDigits)", timeZone: kst, calendar: calendar))
+        let weekday = date.formatted(Date.FormatStyle(locale: Locale(identifier: "ko_KR"), calendar: calendar, timeZone: kst).weekday(.abbreviated))
+        return "\(day) (\(weekday))"
+    }
+
     /// "2026-10-15" → "2026.10.15"
     static func apiDate(_ raw: String) -> String {
         raw.replacingOccurrences(of: "-", with: ".")

@@ -28,6 +28,7 @@ struct ReportView: View {
         .background(Color.canvas)
         .navigationTitle("측정 결과")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .task(id: PollKey(isActive: scenePhase == .active, generation: model.pollGeneration)) {
             guard scenePhase == .active else { return }
             await model.poll(api: api)
@@ -38,10 +39,8 @@ struct ReportView: View {
     private func content(_ detail: AnalysisDetail) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xl) {
-                header(detail)
-                ScoreGauge(score: detail.measurement.overallScore)
-                    .frame(maxWidth: .infinity)
-                MetricBarsSection(summary: detail.measurement.summary)
+                ScoreHero(detail: detail)
+                MetricGridSection(summary: detail.measurement.summary)
                 if !detail.measurement.byRoi.isEmpty {
                     RoiSection(regions: detail.measurement.byRoi)
                 }
@@ -49,29 +48,16 @@ struct ReportView: View {
                 footer
             }
             .padding(.horizontal, Spacing.screen)
-            .padding(.vertical, Spacing.lg)
-        }
-    }
-
-    private func header(_ detail: AnalysisDetail) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack {
-                Text(Formatting.dateTime(detail.createdAt))
-                    .appText(.bodySmall)
-                    .foregroundStyle(.textMuted)
-                if detail.measurement.isDemo { DemoBadge() }
-            }
-            if detail.measurement.isDemo {
-                NoticeBanner(message: AppCopy.demoReportNotice, systemImage: "info.circle")
-            }
+            .padding(.top, Spacing.xs)
+            .padding(.bottom, Spacing.xl)
         }
     }
 
     private var footer: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
+        VStack(alignment: .leading, spacing: Spacing.lg) {
             if model.hasPrevious {
                 NavigationLink(value: AppRoute.trend(analysisID: model.analysisID)) {
-                    Text("이전 측정과 비교")
+                    Label("이전 측정과 비교", systemImage: "chart.line.uptrend.xyaxis")
                 }
                 .buttonStyle(.outline)
             }
@@ -82,75 +68,88 @@ struct ReportView: View {
 
 // MARK: - 종합 점수
 
-private struct ScoreGauge: View {
-    let score: Int
+private struct ScoreHero: View {
+    let detail: AnalysisDetail
+
+    private var grade: Grade { Grade(score: detail.measurement.overallScore) }
+
+    /// 등급별 한 줄 요약. 문구 규칙상 상태를 단정하지 않는다.
+    private var summary: String {
+        switch grade {
+        case .good: "전반적으로 좋은 상태예요."
+        case .normal: "조금만 관리하면 더 좋아질 수 있어요."
+        case .care, .unknown: "꾸준한 관리가 도움이 될 수 있어요."
+        }
+    }
 
     var body: some View {
-        let grade = Grade(score: score)
-        ZStack {
-            Circle()
-                .stroke(Color.canvasSoft, lineWidth: 14)
-            Circle()
-                .trim(from: 0, to: CGFloat(min(max(score, 0), 100)) / 100)
-                .stroke(Color.ink, style: StrokeStyle(lineWidth: 14, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-            VStack(spacing: Spacing.xxs) {
-                Text("\(score)")
-                    .appText(.heading1)
+        VStack(spacing: Spacing.lg) {
+            HStack(spacing: Spacing.xs) {
+                Text(Formatting.dateTime(detail.createdAt))
+                    .appText(.bodySmall)
+                    .foregroundStyle(.textMuted)
+                if detail.measurement.isDemo { DemoBadge() }
+            }
+
+            ScoreRing(score: detail.measurement.overallScore, size: 188)
+
+            VStack(spacing: Spacing.xs) {
+                GradeTag(grade: grade, isFilled: true)
+                Text(summary)
+                    .appText(.title)
                     .foregroundStyle(.ink)
-                GradeTag(grade: grade)
+                    .multilineTextAlignment(.center)
+            }
+
+            if detail.measurement.isDemo {
+                NoticeBanner(message: AppCopy.demoReportNotice, systemImage: "info.circle")
             }
         }
-        .frame(width: 184, height: 184)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("종합 점수")
-        .accessibilityValue("100점 만점에 \(score)점, \(grade.label)")
+        .frame(maxWidth: .infinity)
+        .padding(.top, Spacing.sm)
     }
 }
 
 // MARK: - 지표 4종
 
-private struct MetricBarsSection: View {
+private struct MetricGridSection: View {
     let summary: [MetricSummary]
+    private let columns = [GridItem(.flexible(), spacing: Spacing.sm), GridItem(.flexible(), spacing: Spacing.sm)]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            SectionTitle(title: "지표별 상태")
-            ForEach(summary.filter { $0.metric != .unknown }) { item in
-                MetricBarRow(item: item)
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            SectionTitle(title: "지표별 상태", caption: "100점에 가까울수록 좋아요")
+            LazyVGrid(columns: columns, spacing: Spacing.sm) {
+                ForEach(summary.filter { $0.metric != .unknown }) { item in
+                    MetricTile(item: item)
+                }
             }
         }
     }
 }
 
-private struct MetricBarRow: View {
+private struct MetricTile: View {
     let item: MetricSummary
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack {
-                Text(item.metric.displayName).appText(.link).foregroundStyle(.ink)
+                Text(item.metric.displayName).appText(.bodySmall).foregroundStyle(.textMuted)
                 Spacer()
                 GradeTag(grade: item.grade)
             }
+            Text("\(item.score)")
+                .appText(.heading4)
+                .foregroundStyle(.ink)
             // 막대 길이는 score(좋은 방향 통일)
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.canvasSoft)
-                    Capsule().fill(Color.ink)
-                        .frame(width: proxy.size.width * CGFloat(min(max(item.score, 0), 100)) / 100)
-                }
-            }
-            .frame(height: 8)
-            HStack(spacing: Spacing.xs) {
-                Text("측정값 \(item.value)")
-                if item.metric.lowerIsBetter {
-                    Text("· 낮을수록 좋아요")
-                }
-            }
-            .appText(.caption)
-            .foregroundStyle(.textMuted)
+            ProgressBar(value: item.score)
+            Text(item.metric.lowerIsBetter ? "측정값 \(item.value) · 낮을수록 좋아요" : "측정값 \(item.value)")
+                .appText(.caption)
+                .foregroundStyle(.textFaint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
+        .card(.outlined, padding: Spacing.md, radius: Radius.sm)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(item.metric.displayName)
         .accessibilityValue(
@@ -169,44 +168,57 @@ private struct RoiSection: View {
     private let metrics: [Metric] = [.moisture, .elasticity, .pigmentation, .pore]
 
     var body: some View {
+        let visible = regions.filter { $0.roi != .unknown }
         VStack(alignment: .leading, spacing: Spacing.sm) {
             SectionTitle(title: "부위별 상태")
-            ForEach(regions.filter { $0.roi != .unknown }) { region in
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Button {
-                        withAnimation { toggle(region.id) }
-                    } label: {
-                        HStack {
-                            Text(region.roi.displayName).appText(.body).foregroundStyle(.ink)
-                            Spacer()
-                            GradeTag(grade: region.grade)
-                            Image(systemName: expanded.contains(region.id) ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.textMuted)
-                        }
-                        .frame(minHeight: ControlSize.minTouch)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-
-                    if expanded.contains(region.id) {
-                        ForEach(metrics, id: \.self) { metric in
-                            if let value = region.value(of: metric) {
-                                HStack {
-                                    Text(metric.displayName)
-                                    Spacer()
-                                    Text("\(value)")
-                                }
-                                .appText(.bodySmall)
-                                .foregroundStyle(.textMuted)
+            VStack(spacing: 0) {
+                ForEach(Array(visible.enumerated()), id: \.element.id) { index, region in
+                    VStack(alignment: .leading, spacing: 0) {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) { toggle(region.id) }
+                        } label: {
+                            HStack(spacing: Spacing.sm) {
+                                Text(region.roi.displayName).appText(.body).foregroundStyle(.ink)
+                                Spacer()
+                                Text("\(region.overallScore)").appText(.link).foregroundStyle(.ink)
+                                GradeTag(grade: region.grade)
+                                    .frame(width: 72, alignment: .leading)
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.textFaint)
+                                    .rotationEffect(.degrees(expanded.contains(region.id) ? 180 : 0))
                             }
+                            .frame(minHeight: 52)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint(expanded.contains(region.id) ? "접기" : "지표 펼치기")
+
+                        if expanded.contains(region.id) {
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: Spacing.xs) {
+                                ForEach(metrics, id: \.self) { metric in
+                                    if let value = region.value(of: metric) {
+                                        HStack {
+                                            Text(metric.displayName).foregroundStyle(.textMuted)
+                                            Spacer()
+                                            Text("\(value)").foregroundStyle(.ink)
+                                        }
+                                        .appText(.bodySmall)
+                                        .padding(.horizontal, Spacing.sm)
+                                        .padding(.vertical, Spacing.xs)
+                                        .background(Color.canvasSoft, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    }
+                                }
+                            }
+                            .padding(.bottom, Spacing.md)
+                            .transition(.opacity)
                         }
                     }
+                    if index < visible.count - 1 { Hairline() }
                 }
-                .padding(.horizontal, Spacing.md)
-                .padding(.vertical, Spacing.xxs)
-                .background(Color.canvasSoft, in: RoundedRectangle(cornerRadius: Radius.sm))
             }
+            .padding(.horizontal, Spacing.md)
+            .card(.outlined, padding: 0, radius: Radius.sm)
         }
     }
 
@@ -223,7 +235,7 @@ private struct RecommendationSummarySection: View {
     @Environment(\.api) private var api
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
             SectionTitle(title: "맞춤 추천")
             content
         }
@@ -234,13 +246,22 @@ private struct RecommendationSummarySection: View {
         let recommendation = detail.recommendation
         if detail.status == .failed || recommendation.status == .failed {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                Text("추천을 만들지 못했어요.")
-                    .appText(.body)
-                    .foregroundStyle(.ink)
-                Button(model.isRetrying ? "요청 중…" : "다시 시도") {
-                    Task { await model.retryRecommendation(api: api) }
+                HStack(spacing: Spacing.sm) {
+                    Image(systemName: "exclamationmark.circle").font(.system(size: 18)).foregroundStyle(.ink)
+                    Text("추천을 만들지 못했어요.").appText(.link).foregroundStyle(.ink)
                 }
-                .buttonStyle(.softPill)
+                Text("측정 결과는 그대로 있어요. 다시 시도하면 추천을 새로 작성해요.")
+                    .appText(.bodySmall)
+                    .foregroundStyle(.textMuted)
+                Button {
+                    Task { await model.retryRecommendation(api: api) }
+                } label: {
+                    HStack(spacing: Spacing.xs) {
+                        if model.isRetrying { ProgressView().tint(.onPrimary) }
+                        Text("다시 시도")
+                    }
+                }
+                .buttonStyle(.primary)
                 .disabled(model.isRetrying)
             }
             .card(.soft)
@@ -252,17 +273,23 @@ private struct RecommendationSummarySection: View {
     }
 
     private var pendingCard: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+        VStack(alignment: .leading, spacing: Spacing.md) {
             if model.pollingTimedOut {
-                Text("시간이 오래 걸리고 있어요. 이력에서 나중에 확인할 수 있어요.")
-                    .appText(.body)
+                Text("시간이 오래 걸리고 있어요.")
+                    .appText(.link)
                     .foregroundStyle(.ink)
+                Text("이력에서 나중에 확인할 수 있어요.")
+                    .appText(.bodySmall)
+                    .foregroundStyle(.textMuted)
             } else {
                 HStack(spacing: Spacing.sm) {
                     ProgressView().tint(.ink)
-                    Text(pendingMessage)
-                        .appText(.body)
+                    Text(detail.status == .recommending ? "추천 이유를 정리하고 있어요." : "맞춤 추천을 작성하고 있어요.")
+                        .appText(.link)
                         .foregroundStyle(.ink)
+                }
+                HStack(spacing: Spacing.xs) {
+                    ForEach(pendingDetails, id: \.self) { Chip(title: $0) }
                 }
                 if !model.aiAvailable {
                     Text("서버가 돌아오면 이어서 작성돼요.")
@@ -270,31 +297,31 @@ private struct RecommendationSummarySection: View {
                         .foregroundStyle(.textMuted)
                 }
             }
-            Text("측정 결과는 위에서 계속 볼 수 있어요.")
+            Hairline()
+            Text("기다리는 동안 위에서 측정 결과를 볼 수 있어요.")
                 .appText(.caption)
                 .foregroundStyle(.textMuted)
         }
         .card(.soft)
     }
 
-    private var pendingMessage: String {
-        if detail.status == .recommending {
-            return "추천 이유를 정리하고 있어요 (보통 1분 이내)"
-        }
-        var parts = ["맞춤 추천을 작성하고 있어요"]
-        if let position = detail.queuePosition { parts.append("대기 \(position)번째") }
-        if let wait = detail.estimatedWaitSec { parts.append(Formatting.waitTime(seconds: wait)) }
-        return parts.joined(separator: " · ")
+    private var pendingDetails: [String] {
+        if detail.status == .recommending { return ["보통 1분 이내"] }
+        var details: [String] = []
+        if let position = detail.queuePosition { details.append("대기 \(position)번째") }
+        if let wait = detail.estimatedWaitSec { details.append(Formatting.waitTime(seconds: wait)) }
+        return details
     }
 
     private func doneCard(_ recommendation: Recommendation) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
+        VStack(alignment: .leading, spacing: Spacing.lg) {
             ProfileChips(recommendation: recommendation)
 
             if let answer = recommendation.answer, !answer.isEmpty {
                 Text(Formatting.leadingSentences(answer))
                     .appText(.body)
                     .foregroundStyle(.ink)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             let ingredients = (recommendation.ingredients ?? []).sorted { $0.priority < $1.priority }
@@ -303,12 +330,17 @@ private struct RecommendationSummarySection: View {
                     .appText(.bodySmall)
                     .foregroundStyle(.textMuted)
             } else {
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("추천 성분").appText(.bodySmall).foregroundStyle(.textMuted)
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text("추천 성분").appText(.label).foregroundStyle(.textMuted)
                     ForEach(Array(ingredients.prefix(3).enumerated()), id: \.element.id) { index, ingredient in
-                        Text("\(index + 1). \(ingredient.name)")
-                            .appText(.link)
-                            .foregroundStyle(.ink)
+                        HStack(spacing: Spacing.sm) {
+                            Text("\(index + 1)")
+                                .appText(.label)
+                                .foregroundStyle(index == 0 ? .onPrimary : .ink)
+                                .frame(width: 22, height: 22)
+                                .background(index == 0 ? Color.ink : Color.canvasSoft, in: Circle())
+                            Text(ingredient.name).appText(.link).foregroundStyle(.ink)
+                        }
                     }
                 }
             }
@@ -328,7 +360,7 @@ struct ProfileChips: View {
     let recommendation: Recommendation
 
     var body: some View {
-        FlowLayout {
+        FlowLayout(spacing: 6) {
             if let skinType = recommendation.skinType?.code, skinType != .unknown {
                 Chip(title: skinType.label, isSelected: true)
             }

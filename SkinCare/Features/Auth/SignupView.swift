@@ -27,35 +27,52 @@ struct SignupView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                Text("계정을 만들어요.")
-                    .appText(.heading3)
-                    .foregroundStyle(.ink)
+            VStack(alignment: .leading, spacing: Spacing.xl) {
+                ScreenHeader(title: "계정을 만들어요.", subtitle: "측정 기록을 모아 변화를 볼 수 있어요.")
 
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    AppTextField(placeholder: "이메일", text: $email, keyboard: .emailAddress, contentType: .username)
-                    fieldMessage(emailError ?? (email.isEmpty || SignupValidation.isValidEmail(email) ? nil : "이메일 형식을 확인해 주세요."))
-                    AppTextField(placeholder: "비밀번호 (8–64자, 영문·숫자·특수문자 중 2종 이상)", text: $password,
-                                 isSecure: true, contentType: .newPassword)
-                    fieldMessage(password.isEmpty ? nil : SignupValidation.passwordError(password))
-                    AppTextField(placeholder: "닉네임 (2–20자)", text: $nickname, contentType: .nickname)
-                    fieldMessage(nickname.isEmpty ? nil : SignupValidation.nicknameError(nickname))
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    LabeledField(title: "이메일",
+                                 message: emailError ?? (email.isEmpty || SignupValidation.isValidEmail(email) ? nil : "이메일 형식을 확인해 주세요.")) {
+                        AppTextField(placeholder: "name@example.com", text: $email, keyboard: .emailAddress, contentType: .username)
+                    }
+                    LabeledField(title: "비밀번호",
+                                 hint: "8–64자, 영문·숫자·특수문자 중 2종 이상",
+                                 message: password.isEmpty ? nil : SignupValidation.passwordError(password)) {
+                        AppTextField(placeholder: "비밀번호", text: $password, isSecure: true, contentType: .newPassword)
+                    }
+                    LabeledField(title: "닉네임", hint: "2–20자",
+                                 message: nickname.isEmpty ? nil : SignupValidation.nicknameError(nickname)) {
+                        AppTextField(placeholder: "닉네임", text: $nickname, contentType: .nickname)
+                    }
                 }
 
                 agreements
 
                 if let formError {
-                    fieldMessage(formError)
+                    Label(formError, systemImage: "exclamationmark.circle")
+                        .appText(.bodySmall)
+                        .foregroundStyle(.gradeCare)
                 }
-
-                Button(isSubmitting ? "가입 중…" : "가입하기") { Task { await submit() } }
-                    .buttonStyle(.primary)
-                    .disabled(!canSubmit)
             }
             .padding(.horizontal, Spacing.screen)
-            .padding(.vertical, Spacing.lg)
+            .padding(.top, Spacing.xs)
+            .padding(.bottom, Spacing.lg)
         }
         .scrollDismissesKeyboard(.interactively)
+        .safeAreaInset(edge: .bottom) {
+            BottomActionBar {
+                Button {
+                    Task { await submit() }
+                } label: {
+                    HStack(spacing: Spacing.xs) {
+                        if isSubmitting { ProgressView().tint(.onPrimary) }
+                        Text("가입하기")
+                    }
+                }
+                .buttonStyle(.primary)
+                .disabled(!canSubmit)
+            }
+        }
         .background(Color.canvas)
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: email) { emailError = nil }
@@ -65,19 +82,22 @@ struct SignupView: View {
     }
 
     private var agreements: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            AgreementRow(title: "전체 동의", isOn: Binding(
+        VStack(alignment: .leading, spacing: 0) {
+            AgreementRow(title: "약관 전체 동의", isOn: Binding(
                 get: { allAgreed },
                 set: { value in
                     agreesTerms = value; agreesPrivacy = value; agreesImage = value; confirmsOver14 = value
                 }
             ), isEmphasized: true)
-            Divider().overlay(Color.hairlineSoft)
-            AgreementRow(title: "(필수) 이용약관 동의", isOn: $agreesTerms)
-            AgreementRow(title: "(필수) 개인정보 수집·이용 동의", isOn: $agreesPrivacy)
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                AgreementRow(title: "(필수) 얼굴 이미지 처리 동의", isOn: $agreesImage)
-                HStack(spacing: Spacing.xs) {
+            .padding(.horizontal, Spacing.md)
+            .background(Color.canvasSoft, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+            .padding(.bottom, Spacing.xs)
+
+            VStack(alignment: .leading, spacing: 0) {
+                AgreementRow(title: "이용약관 동의", isOn: $agreesTerms)
+                AgreementRow(title: "개인정보 수집·이용 동의", isOn: $agreesPrivacy)
+                AgreementRow(title: "얼굴 이미지 처리 동의", isOn: $agreesImage)
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
                     Text(AppCopy.imageConsentShort)
                         .appText(.caption)
                         .foregroundStyle(.textMuted)
@@ -88,19 +108,11 @@ struct SignupView: View {
                             .underline()
                     }
                 }
-                .padding(.leading, 32)
+                .padding(.leading, 34)
+                .padding(.bottom, Spacing.xs)
+                AgreementRow(title: "만 14세 이상입니다", isOn: $confirmsOver14)
             }
-            AgreementRow(title: "(필수) 만 14세 이상입니다", isOn: $confirmsOver14)
-        }
-        .card(.outlined, padding: Spacing.md, radius: Radius.sm)
-    }
-
-    @ViewBuilder
-    private func fieldMessage(_ message: String?) -> some View {
-        if let message {
-            Text(message)
-                .appText(.caption)
-                .foregroundStyle(.gradeCare)
+            .padding(.horizontal, Spacing.md)
         }
     }
 
@@ -125,6 +137,30 @@ struct SignupView: View {
     }
 }
 
+private struct LabeledField<Field: View>: View {
+    let title: String
+    var hint: String?
+    var message: String?
+    @ViewBuilder let field: Field
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title).appText(.label).foregroundStyle(.ink)
+                if let hint { Text(hint).appText(.caption).foregroundStyle(.textFaint) }
+            }
+            field
+            if let message {
+                Text(message)
+                    .appText(.caption)
+                    .foregroundStyle(.gradeCare)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: message)
+    }
+}
+
 private struct AgreementRow: View {
     let title: String
     @Binding var isOn: Bool
@@ -134,19 +170,24 @@ private struct AgreementRow: View {
         Button {
             isOn.toggle()
         } label: {
-            HStack(spacing: Spacing.xs) {
+            HStack(spacing: Spacing.sm) {
                 Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 22))
-                    .foregroundStyle(isOn ? .ink : .textFaint)
+                    .font(.system(size: 22, weight: .regular))
+                    .foregroundStyle(isOn ? .ink : .hairline)
+                    .contentTransition(.symbolEffect(.replace))
                 Text(title)
                     .appText(isEmphasized ? .link : .body)
                     .foregroundStyle(.ink)
+                if !isEmphasized {
+                    Text("필수").appText(.caption).foregroundStyle(.textFaint)
+                }
                 Spacer()
             }
-            .frame(minHeight: ControlSize.minTouch)
+            .frame(minHeight: 48)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(isEmphasized ? title : "필수, \(title)")
         .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 }
