@@ -39,6 +39,7 @@
 | `docs/common/04_개발운영계획서_스킨케어.docx` / `.pdf` | 개발 일정, 환경, 배포·운영 계획 (FE 부분은 패치 문서 §4 참고) |
 | `docs/patch/01_swift-ios-patch.md` | 공통 문서 iOS(Swift) 패치 — 공통 문서보다 우선. 팀 합의 필요 항목(§0) 포함 |
 | `docs/design/design.md` | 디자인 시스템 (색상, 타이포, 레이아웃, 컴포넌트, Do/Don't) |
+| `docs/design/skincare_icon_transparent.png`, `.ico` | 앱 아이콘 원본. iOS용(불투명·정사각 1024)은 `SkinCare/Resources/Assets.xcassets/AppIcon.appiconset/` — 원본을 바꾸면 다시 변환 필요 |
 | `docs/trouble_shooting/` | 문제 해결 기록. 규칙: `README.md`, 양식: `TEMPLATE.md`, 목록: `INDEX.md` |
 | `private/` | 개인 자료. `.gitignore` 처리됨 — 커밋 금지 |
 
