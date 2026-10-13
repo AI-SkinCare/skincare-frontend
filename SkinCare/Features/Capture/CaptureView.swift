@@ -1,3 +1,4 @@
+import AVFoundation
 import PhotosUI
 import SwiftUI
 
@@ -5,9 +6,25 @@ import SwiftUI
 struct CaptureView: View {
     @Environment(CaptureFlowModel.self) private var model
     @State private var pickerItem: PhotosPickerItem?
-    @State private var showsCamera = false
 
-    private let cameraAvailable = UIImagePickerController.isSourceTypeAvailable(.camera)
+    @State private var showsCamera = Self.opensCameraOnStart
+
+    /// 전면 카메라가 있을 때만 촬영 버튼을 보인다. Debug 빌드는 시뮬레이터에서도 카메라 화면을 확인할 수 있게 항상 보인다.
+    private var cameraAvailable: Bool {
+        #if DEBUG
+        true
+        #else
+        AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front) != nil
+        #endif
+    }
+
+    private static var opensCameraOnStart: Bool {
+        #if DEBUG
+        DebugLaunch.startScreen == .camera
+        #else
+        false
+        #endif
+    }
 
     var body: some View {
         ScrollView {
@@ -58,10 +75,9 @@ struct CaptureView: View {
             }
         }
         .fullScreenCover(isPresented: $showsCamera) {
-            CameraPicker { data in
+            CameraView { data in
                 Task { await model.handlePickedImage(data) }
             }
-            .ignoresSafeArea()
         }
     }
 
@@ -120,50 +136,5 @@ private struct FaceGuide: View {
                 .foregroundStyle(.textMuted)
         }
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// 전면 카메라 촬영. TODO: 얼굴 가이드 오버레이가 있는 AVFoundation 커스텀 카메라로 교체 (패치 §2 SCR-05)
-struct CameraPicker: UIViewControllerRepresentable {
-    let onCapture: (Data) -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.sourceType = .camera
-        if UIImagePickerController.isCameraDeviceAvailable(.front) {
-            picker.cameraDevice = .front
-        }
-        picker.delegate = context.coordinator
-        return picker
-    }
-
-    func updateUIViewController(_ controller: UIImagePickerController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
-    }
-
-    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let parent: CameraPicker
-
-        init(parent: CameraPicker) {
-            self.parent = parent
-        }
-
-        func imagePickerController(
-            _ picker: UIImagePickerController,
-            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
-        ) {
-            // 사진 앱에 저장하지 않는다 (NFR-PRI-01). 메모리에서만 넘긴다.
-            if let image = info[.originalImage] as? UIImage, let data = image.jpegData(compressionQuality: 1) {
-                parent.onCapture(data)
-            }
-            parent.dismiss()
-        }
-
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.dismiss()
-        }
     }
 }

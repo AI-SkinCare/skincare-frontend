@@ -40,7 +40,7 @@ struct CaptureFlowView: View {
     #if DEBUG
     private func applyDebugStartScreen() {
         switch DebugLaunch.startScreen {
-        case .capture: model.path = model.startsWithGuide ? [.capture] : []
+        case .capture, .camera: model.path = model.startsWithGuide ? [.capture] : []
         case .survey: model.path = model.startsWithGuide ? [.capture, .survey] : [.survey]
         default: break
         }

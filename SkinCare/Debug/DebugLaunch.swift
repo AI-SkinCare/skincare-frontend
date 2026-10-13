@@ -9,7 +9,7 @@ import Foundation
 /// - `-StartScreen <이름>`: 해당 화면을 바로 연다. 이름은 `StartScreen` 참고
 enum DebugLaunch {
     enum StartScreen: String {
-        case login, signup, home, guide, capture, survey
+        case login, signup, home, guide, capture, camera, survey
         case reportDone = "report-done"
         case reportQueued = "report-queued"
         case reportRecommending = "report-recommending"
@@ -43,7 +43,7 @@ enum DebugLaunch {
     @MainActor
     static func applyStartScreen(to router: AppRouter) {
         switch startScreen {
-        case .guide, .capture, .survey:
+        case .guide, .capture, .camera, .survey:
             router.isCaptureFlowPresented = true
         case .reportDone, .reportDemo:
             router.homePath = [.report(analysisID: startScreen == .reportDemo ? MockData.demoID : MockData.doneID)]

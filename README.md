@@ -26,7 +26,7 @@
 - API 주소: Debug는 `http://localhost:3000/api/v1`, Release는 `Config/Release.xcconfig`의 `API_BASE_URL`
 - 실기기에서 맥의 로컬 백엔드에 붙으려면 `Local.xcconfig`에 `API_BASE_URL = http:/$()/<맥 LAN IP>:3000/api/v1`
 - 백엔드 없이 UI 확인 (Debug 전용): 스킴 Arguments에 `-MockAPI` 추가 → 목 응답으로 자동 로그인
-  - `-StartScreen <이름>`으로 화면 바로 열기: `login` `signup` `home` `guide` `capture` `survey` `report-done` `report-queued` `report-recommending` `report-failed` `report-demo` `recommendation` `trend` `history` `mypage`
+  - `-StartScreen <이름>`으로 화면 바로 열기: `login` `signup` `home` `guide` `capture` `camera` `survey` `report-done` `report-queued` `report-recommending` `report-failed` `report-demo` `recommendation` `trend` `history` `mypage`
   - `-MockAIDown`(분석 서버 점검 중), `-MockEmpty`(이력 없음)
 - 테스트: `xcodebuild test -project SkinCare.xcodeproj -scheme SkinCare -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max'`
 
