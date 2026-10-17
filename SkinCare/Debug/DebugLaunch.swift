@@ -5,7 +5,9 @@ import Foundation
 ///
 /// - `-MockAPI`: 백엔드 없이 목 응답으로 실행 (자동 로그인 상태)
 /// - `-MockAIDown`: 목 응답에서 분석 서버 점검 중
-/// - `-MockEmpty`: 목 응답에서 측정 이력 없음
+/// - `-MockEmpty`: 목 응답에서 분석 이력 없음
+/// - `-FixtureScenario <값>`: 실제 백엔드(개발 서버)에 `X-Fixture-Scenario` 헤더를 붙인다 (API 변경사항 §1.5).
+///   값: `ok` `uncertain` `no-concern` `rec-timeout` `rec-slow` `no-face` `ai-down`
 /// - `-StartScreen <이름>`: 해당 화면을 바로 연다. 이름은 `StartScreen` 참고
 enum DebugLaunch {
     enum StartScreen: String {
@@ -24,6 +26,11 @@ enum DebugLaunch {
     static var usesMockAPI: Bool { arguments.contains("-MockAPI") }
     static var mockAIDown: Bool { arguments.contains("-MockAIDown") }
     static var mockEmpty: Bool { arguments.contains("-MockEmpty") }
+
+    static var fixtureScenario: String? {
+        guard let index = arguments.firstIndex(of: "-FixtureScenario"), index + 1 < arguments.count else { return nil }
+        return arguments[index + 1]
+    }
 
     static var startScreen: StartScreen? {
         guard let index = arguments.firstIndex(of: "-StartScreen"), index + 1 < arguments.count else { return nil }

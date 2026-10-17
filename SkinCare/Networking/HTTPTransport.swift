@@ -63,6 +63,12 @@ struct HTTPTransport: Sendable {
         if let accessToken {
             urlRequest.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         }
+        #if DEBUG
+        // 백엔드 개발 서버의 시나리오 재현용 (production에선 무시됨)
+        if let scenario = DebugLaunch.fixtureScenario {
+            urlRequest.setValue(scenario, forHTTPHeaderField: "X-Fixture-Scenario")
+        }
+        #endif
 
         switch request.body {
         case .none:

@@ -15,7 +15,7 @@ struct MainTabView: View {
             NavigationStack(path: $router.historyPath) {
                 HistoryView().appRouteDestinations()
             }
-            .tabItem { Label("이력", systemImage: "chart.line.uptrend.xyaxis") }
+            .tabItem { Label("이력", systemImage: "clock.arrow.circlepath") }
             .tag(AppTab.history)
 
             NavigationStack {

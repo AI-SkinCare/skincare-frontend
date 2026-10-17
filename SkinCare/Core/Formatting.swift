@@ -54,11 +54,6 @@ enum Formatting {
         return "\(day) (\(weekday))"
     }
 
-    /// "2026-10-15" → "2026.10.15"
-    static func apiDate(_ raw: String) -> String {
-        raw.replacingOccurrences(of: "-", with: ".")
-    }
-
     /// 예상 대기 시간 문구: "1분 이내", "약 2분"
     static func waitTime(seconds: Int) -> String {
         guard seconds > 60 else { return "1분 이내" }

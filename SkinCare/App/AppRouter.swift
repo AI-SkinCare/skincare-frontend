@@ -17,7 +17,7 @@ final class AppRouter {
     var selectedTab: AppTab = .home
     var homePath: [AppRoute] = []
     var historyPath: [AppRoute] = []
-    /// 측정 흐름(SCR-04~07)은 탭을 가리는 전체 화면으로 띄운다.
+    /// 촬영 흐름(SCR-04~07)은 탭을 가리는 전체 화면으로 띄운다.
     var isCaptureFlowPresented = false
 
     /// 분석 제출 직후: 촬영 흐름을 닫고 홈 탭에서 결과 리포트를 연다.

@@ -7,7 +7,7 @@ struct DiseaseTile: View {
 
     var body: some View {
         Text(disease.label)
-            .font(Font.custom("Pretendard-Bold", size: size * 0.27))
+            .font(.pretendard(.bold, size: size * 0.27))
             .foregroundStyle(disease.uncertain ? .textMuted : .ink)
             .lineLimit(1)
             .minimumScaleFactor(0.7)

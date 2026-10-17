@@ -68,10 +68,10 @@ private struct ClassificationHero: View {
 
             HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
                 Text(disease.label)
-                    .font(Font.custom("Pretendard-Bold", size: 44, relativeTo: .largeTitle))
+                    .appText(.display)
                     .foregroundStyle(disease.uncertain ? .textMuted : .ink)
                 if disease.uncertain {
-                    Chip(title: "판단 보류")
+                    Chip(title: "판단 보류", isOnSoftSurface: true)
                 }
             }
 

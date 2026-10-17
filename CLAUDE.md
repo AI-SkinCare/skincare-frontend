@@ -13,7 +13,7 @@
 `docs/new_common/스킨케어_수행계획서_파이프라인개정_20261015`가 **최신 기획**이다. 기존 `docs/common/`(v1.0, 10/01)과 다르면 개정 계획서가 우선한다.
 
 - **파이프라인**: Swift iOS 앱 → **Spring Boot**(기존 NestJS 아님) → FastAPI **DenseNet121 이미지 분류**(6종: 건선·아토피·여드름·정상·주사·지루) → **Qwen2.5 성분 추천**. 프론트가 Swift 앱인 것은 계획서에 공식 반영됨.
-- **제외된 기능**: 수분·탄력·색소침착·모공 4개 지표 회귀, 9개 ROI 분할, 촬영 환경 보정, 종합 점수·등급. → 기존 결과 리포트·추이 비교·이력 카드의 점수 표시는 새 기획에 맞게 다시 만들어야 한다.
+- **제외된 기능**: 수분·탄력·색소침착·모공 4개 지표 회귀, 9개 ROI 분할, 촬영 환경 보정, 종합 점수·등급. → 앱에서 모두 제거함 (결과 리포트는 분류 + 추천 구조로 재구성, 추이 화면 삭제).
 - **API 계약 (백엔드 확정, `docs/new_common/api변경사항.md`가 기준)**: `POST /api/v1/analyses`(image + survey JSON) → `GET /api/v1/analyses/{id}` 조회. 응답은 모두 `AnalysisView`. 이력·삭제·재요청·시스템 상태 API 유지, 추이 API 삭제, `deviceType` 삭제. 리프레시 토큰 본문 전달(패치 A2) 반영됨.
   - 작업 상태 `status`: `QUEUED` · `GENERATING` · `COMPLETED` · `WITHHELD`(추천 보류) · `FAILED`
   - AI 결과 `recommendationStatus`: `generated` · `uncertain`(분류 점수 0.6 미만 등 → 재촬영·상담 안내) · `no_concern`(정상 + 고민 없음 → 설문 선택 안내)
@@ -45,6 +45,8 @@
 - 구조는 README "구조" 참고. 디자인 토큰: `SkinCare/DesignSystem/`, API: `SkinCare/Networking/Endpoints.swift`, 고정 문구: `SkinCare/App/AppCopy.swift`.
 - 빌드 설정: `Config/*.xcconfig` (API 주소 등). 개인 값은 `Config/Local.xcconfig`(커밋 안 됨).
 - 백엔드 없이 화면 확인: Debug 실행 인자 `-MockAPI -StartScreen <이름>` (README "실행" 참고). UI를 바꾸면 시뮬레이터 스크린샷으로 확인한다.
+- 실제 백엔드 개발 서버의 시나리오 재현: Debug 실행 인자 `-FixtureScenario <ok|uncertain|no-concern|rec-timeout|rec-slow|no-face|ai-down>` → `X-Fixture-Scenario` 헤더.
+- 글꼴은 `appText(_:)` 토큰(`display`·`tabTitle`·`heading3`…)을 쓰고, 비례 크기가 필요한 곳만 `Font.pretendard(_:size:)`. 화면 코드에 `"Pretendard-…"` 문자열 금지.
 - 빌드·테스트: `xcodebuild test -project SkinCare.xcodeproj -scheme SkinCare -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max'`
 - 화면 모델은 `@MainActor @Observable`, API 모델은 `Sendable`. 서버 열거형은 `UnknownCaseDecodable`로 모르는 값을 `unknown`으로 받는다.
 - 화면 문구는 화면 설계서 §4 문구 규칙(진단·치료 표현 금지)을 지킨다. 분류 라벨(질환명)은 그대로 표시하되 "참고 결과·진단 아님" 안내와 함께 쓴다. 고민 표기는 `Concern.displayLabel`만 쓰고 서버 label은 화면에 쓰지 않는다.

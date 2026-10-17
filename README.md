@@ -22,14 +22,15 @@
 
 1. Xcode 26 이상에서 `SkinCare.xcodeproj` 열기
 2. (실기기·TestFlight) `Config/Local.xcconfig.example`을 `Config/Local.xcconfig`로 복사하고 `DEVELOPMENT_TEAM` 입력
-3. 백엔드를 로컬에서 `AI_MODE=fixture`로 실행 (`http://localhost:3000`)
+3. 백엔드(Spring Boot)를 로컬에서 개발 모드로 실행 — Swagger `/api/docs`, fixture 응답 (API 변경사항 §1.5)
 4. `SkinCare` 스킴 + iPhone 시뮬레이터로 실행
 
-- API 주소: Debug는 `http://localhost:3000/api/v1`, Release는 `Config/Release.xcconfig`의 `API_BASE_URL`
+- API 주소: Debug는 `http://localhost:3000/api/v1`, Release는 `Config/Release.xcconfig`의 `API_BASE_URL`. 백엔드 포트가 다르면 `Local.xcconfig`의 `API_BASE_URL`로 덮어쓴다
 - 실기기에서 맥의 로컬 백엔드에 붙으려면 `Local.xcconfig`에 `API_BASE_URL = http:/$()/<맥 LAN IP>:3000/api/v1`
 - 백엔드 없이 UI 확인 (Debug 전용): 스킴 Arguments에 `-MockAPI` 추가 → 목 응답으로 자동 로그인
   - `-StartScreen <이름>`으로 화면 바로 열기: `login` `signup` `home` `guide` `capture` `camera` `survey` `report-completed` `report-queued` `report-generating` `report-uncertain` `report-no-concern` `report-failed` `recommendation` `history` `mypage`
   - `-MockAIDown`(분석 서버 점검 중), `-MockEmpty`(이력 없음)
+- 실제 백엔드 개발 서버에서 상황 재현 (Debug 전용): `-FixtureScenario <값>` → `X-Fixture-Scenario` 헤더. 값: `ok` `uncertain` `no-concern` `rec-timeout` `rec-slow` `no-face` `ai-down`
 - 테스트: `xcodebuild test -project SkinCare.xcodeproj -scheme SkinCare -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max'`
 
 ## 구조

@@ -328,8 +328,8 @@ The system is essentially shadow-free: no drop shadows appear on any card, butto
 
 - **Pretendard** (앱 번들, OFL). Saans는 상용·한글 미지원이고, Pretendard의 라틴 글리프는 위에서 권장한 대체 폰트 Inter 기반이다.
 - 굵기 매핑: 652 → Bold, 600 → SemiBold, 456 → Medium, 300 → Light. 크기는 pt, Dynamic Type을 따른다.
-- 웹 히어로용 `display`(80) · `heading-2`(44)는 쓰지 않는다. `heading-1`(56)은 종합 점수 숫자에만 쓴다.
-- `heading-3`은 모바일·한글 폭에 맞춰 28pt / 1.2로 줄여 화면 대표 제목에 쓴다. 탭 루트 제목(홈·이력·마이)은 30pt Bold. 결과 화면의 분류 라벨은 44pt Bold.
+- 웹 히어로용 `display`(80) · `heading-1`(56) · `heading-2`(44)는 쓰지 않는다. 대신 앱 전용 토큰 두 개를 추가했다: 결과 화면 분류 라벨 `app-display`(44pt Bold, Swift `.display`), 탭 루트 제목 `tab-title`(30pt Bold, Swift `.tabTitle`).
+- `heading-3`은 모바일·한글 폭에 맞춰 28pt / 1.2로 줄여 화면 대표 제목에 쓴다.
 
 ### Semantic
 

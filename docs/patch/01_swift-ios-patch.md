@@ -14,7 +14,7 @@
 ## 읽는 법
 
 - 공통 문서는 프론트엔드를 **React 웹 SPA** 기준으로 작성했다. 프론트엔드는 **Swift(SwiftUI) iOS 네이티브 앱**으로 만든다.
-- 이 문서는 공통 문서에서 **바꿔야 하는 부분만** 모은 패치다. 여기에 없는 내용(기능, API 계약, 에러 코드, 문구 규칙, 등급 계산 등)은 공통 문서를 그대로 따른다.
+- 이 문서는 공통 문서에서 **바꿔야 하는 부분만** 모은 패치다. 여기에 없는 내용(기능, API 계약, 에러 코드, 문구 규칙 등)은 개정 기획(`docs/new_common/`)과 공통 문서를 따른다.
 - **공통 문서와 이 문서가 다르면 이 문서가 우선한다.**
 - 형식: `원문` → `수정` / 이유.
 - 문서 번호: 01 요구사항(SC-01) · 02 설계서(SC-02 시스템, SC-03 API, SC-04 DB) · 03 화면(SC-05) · 04 개발운영(SC-06 협업, SC-07 WBS, SC-08 테스트).
@@ -96,8 +96,8 @@
 
 ### §1 화면 흐름 · 하단 탭
 
-- `하단 탭(로그인 후 항상 표시): 홈 · 이력 · 마이. 측정 흐름(SCR-04~07) 동안에는 탭을 숨기고 상단 "닫기"로 홈에 돌아갑니다.`
-- → 그대로 유지. 구현: `TabView` 3개 탭 + 측정 흐름은 `fullScreenCover`로 띄워서 탭을 자연스럽게 가린다. "닫기"는 cover dismiss.
+- `하단 탭(로그인 후 항상 표시): 홈 · 이력 · 마이. 촬영 흐름(SCR-04~07) 동안에는 탭을 숨기고 상단 "닫기"로 홈에 돌아갑니다.`
+- → 그대로 유지. 구현: `TabView` 3개 탭 + 촬영 흐름은 `fullScreenCover`로 띄워서 탭을 자연스럽게 가린다. "닫기"는 cover dismiss.
 
 ### §2 화면 목록 · "경로" 열
 
@@ -108,9 +108,9 @@
 | SCR-01 | /login | `LoginView` | 비로그인 루트 |
 | SCR-02 | /signup | `SignupView` | 로그인에서 push |
 | SCR-03 | / | `HomeView` | 탭 1 |
-| SCR-04 | /capture/guide | `CaptureGuideView` | 측정 흐름 cover 첫 화면 |
-| SCR-05 | /capture | `CaptureView` | 측정 흐름 push |
-| SCR-06 | /capture/survey | `SurveyView` | 측정 흐름 push |
+| SCR-04 | /capture/guide | `CaptureGuideView` | 촬영 흐름 cover 첫 화면 |
+| SCR-05 | /capture | `CaptureView` | 촬영 흐름 push |
+| SCR-06 | /capture/survey | `SurveyView` | 촬영 흐름 push |
 | SCR-07 | (오버레이) | `MeasuringOverlay` | SurveyView 위 전체 화면 오버레이 |
 | SCR-08 | /analyses/:id | `ReportView` — 분류 참고 결과 + 6종 점수 + 추천(상태별) | cover 닫고 홈 탭에서 push |
 | SCR-09 | /analyses/:id/recommendation | `RecommendationView` | ReportView에서 push |
@@ -132,11 +132,11 @@
 | 사전 검증: 형식(JPEG/PNG), 크기 10MB, 짧은 변 720px | 형식 검증 삭제(모두 JPEG로 변환). 짧은 변 720px(원본), 전송 크기 10MB(변환 후). 위반 시 미리보기 아래 문구 + 다음 버튼 비활성 — 동작은 동일 |
 | 리사이즈: 긴 변 1600px, JPEG 0.9 | 그대로. 추가: **EXIF 방향(orientation) 반영 후** 리사이즈, 메타데이터 제거 |
 
-- 권한: `NSCameraUsageDescription` 필요. 문구는 문구 규칙에 맞춘다 (예: "피부 상태 측정을 위해 얼굴 사진을 촬영해요. 사진은 측정에만 쓰고 저장하지 않아요.").
+- 권한: `NSCameraUsageDescription` 필요. 문구는 문구 규칙에 맞춘다 (현재: "피부 이미지 분석을 위해 얼굴 사진을 촬영해요. 사진은 분석에만 쓰고 저장하지 않아요.").
 - 카메라 권한 거부 시: 설정 앱으로 이동 버튼 + 앨범 선택은 계속 가능.
 - 시뮬레이터에는 카메라가 없으므로 개발 중에는 앨범 선택으로 테스트한다.
 
-### SCR-07 측정 중
+### SCR-07 분석 중
 
 - 그대로. 업로드 중 앱이 백그라운드로 가도 요청이 끊기지 않게 짧은 백그라운드 작업(`beginBackgroundTask`)으로 감싼다.
 
@@ -179,7 +179,7 @@
 | 간격 | 8px 배수 | design.md spacing 토큰 (4pt 반단계 포함) |
 | 터치 영역 | 최소 44×44px | 44×44pt (동일) |
 | 주 색상 | 청록 계열 1색 (버튼·링크·게이지) | **삭제.** 버튼·게이지는 ink `#141414`, accent 블루 `#0066ff`는 design.md 규칙대로 "결정이 필요한 강조"에만 사용 |
-| 등급 색 | 양호 초록 · 보통 황색 · 관리 필요 주황, 글자 라벨 병기 | 유지하되 **design.md에 시맨틱 grade 토큰으로 추가**해서 쓴다 (design.md는 상태 색이 없음). 등급 점·라벨에만 쓰고 넓은 면적에는 쓰지 않는다. 글자 라벨 병기 규칙 유지 |
+| ~~등급 색~~ | 양호·보통·관리 필요 | **폐기** — 개정 기획으로 등급 없음. 오류·삭제 표시용 `{colors.negative}`만 남김 |
 | 대비 | 본문 명암비 4.5:1 | 그대로 |
 | 대체 텍스트 | alt/aria-label | `accessibilityLabel` / `accessibilityValue` (얼굴 도식·게이지·막대 그래프) |
 | 로딩 | 0.3초 이상 → 스켈레톤 또는 진행 표시 | 그대로. 스켈레톤은 `.redacted(reason: .placeholder)` |
@@ -225,7 +225,7 @@
 
 | 항목 | 원문 (React) | 수정 (iOS) |
 |------|--------------|------------|
-| 라우팅 | React Router | `TabView` + `NavigationStack` + 화면 enum, 측정 흐름은 `fullScreenCover` (§2 표) |
+| 라우팅 | React Router | `TabView` + `NavigationStack` + 화면 enum, 촬영 흐름은 `fullScreenCover` (§2 표) |
 | 서버 상태 | TanStack Query refetch | `@Observable` 화면 모델 + `async/await`. 폴링은 `Task` + `Task.sleep`, 규칙은 §2 SCR-08 |
 | HTTP | axios 1개, withCredentials, 401 시 refresh single-flight | `APIClient` 1개 (URLSession). 401(E1001)이면 refresh 후 원 요청 1회 재시도. **single-flight는 actor로 구현** — 동시에 여러 401이 와도 refresh 요청은 하나만, 나머지는 그 결과를 기다림 (원문 이유 그대로 유효: 교체 방식이라 두 번 보내면 로그아웃됨) |
 | 토큰 | 메모리 + httpOnly 쿠키, 앱 시작 시 /auth/refresh | 메모리 + Keychain (§3.1). 앱 시작 시 스플래시에서 Keychain 토큰으로 /auth/refresh → 성공 시 메인, 실패 시 로그인 |
@@ -296,7 +296,7 @@
 
 - 원문 `npm ci && npm run dev` 삭제 →
   1. Xcode(최신 안정판)에서 `.xcodeproj` 열기
-  2. 백엔드를 `AI_MODE=fixture`로 로컬 실행 (원문 그대로)
+  2. 백엔드를 개발 모드로 로컬 실행 (fixture 응답, API 변경사항 §1.5)
   3. Debug 스킴 + iPhone 시뮬레이터로 실행 → `localhost:3000`에 직접 연결
   4. 실기기: `Local.xcconfig`에 맥 LAN IP 지정, 맥과 같은 Wi-Fi
 - 도구 표: `Node.js 20 LTS (프론트)` → `Xcode 최신 안정판, macOS`. (백엔드 개발용 Node는 그대로)
@@ -313,7 +313,7 @@
 | ID | 원문 | 수정 |
 |----|------|------|
 | 5.1 | Vite·라우팅·Query·ESLint·CI 셋업 | Xcode 프로젝트·탭/내비게이션 골격·APIClient·디자인 토큰·SwiftLint·CI 셋업 |
-| 5.3 | 촬영 가이드·촬영·설문·측정 중 | 동일 + 커스텀 카메라·HEIC 변환·이미지 리사이즈 |
+| 5.3 | 촬영 가이드·촬영·설문·분석 중 | 동일 + 커스텀 카메라·HEIC 변환·이미지 리사이즈 |
 | 5.7 | E2E 테스트 (Playwright) | UI 테스트 (XCUITest) |
 | 5.8 (신규) | — | TestFlight 배포 (v0.1.0 10/18, v0.2.0 11/24, v1.0.0 12/8) |
 | 6.1 | 자택 서버 Docker Compose + Cloudflare Tunnel 배포 | 동일. 단 web(nginx) 컨테이너는 프론트 서빙 없이 `/api` 프록시 역할만 |
@@ -326,7 +326,7 @@
 |------|------|
 | 단위: Vitest(FE) | **Swift Testing** (XCTest 병행 가능) — 화면 모델, APIClient(URLProtocol 목), 폴링 정책, 이미지 검증·리사이즈 |
 | E2E: Playwright (모바일 뷰포트 390×844) | **XCUITest**, iPhone 16 시뮬레이터 + 실기기 1회 (발표 전) |
-| E2E 실행 환경 | 백엔드 `AI_MODE=fixture`, 시나리오 헤더 `X-Fixture-Scenario`를 앱 Debug 설정에서 주입 가능하게 |
+| E2E 실행 환경 | 백엔드 개발 모드, 시나리오 헤더 `X-Fixture-Scenario`는 앱 Debug 실행 인자 `-FixtureScenario <값>`으로 주입 (구현됨) |
 | TC-E2E-01~03 | 시나리오 그대로. 사진 선택은 시뮬레이터 사진 보관함에 테스트 이미지를 미리 넣어 PhotosPicker로 선택 |
 
 추가 테스트 케이스 (앱 전용):

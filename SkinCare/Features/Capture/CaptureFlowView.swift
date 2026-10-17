@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 측정 흐름 컨테이너. 탭을 가리는 전체 화면, 상단 "닫기"로 홈에 돌아간다 (화면 설계서 §1).
+/// 촬영 흐름 컨테이너. 탭을 가리는 전체 화면, 상단 "닫기"로 홈에 돌아간다 (화면 설계서 §1).
 struct CaptureFlowView: View {
     @Environment(\.api) private var api
     @State private var model = CaptureFlowModel(
@@ -49,7 +49,7 @@ struct CaptureFlowView: View {
 }
 
 extension View {
-    /// 측정 흐름 각 화면의 "닫기" 버튼
+    /// 촬영 흐름 각 화면의 "닫기" 버튼
     func captureCloseButton() -> some View {
         modifier(CaptureCloseButton())
     }
@@ -71,7 +71,7 @@ private struct CaptureCloseButton: ViewModifier {
     }
 }
 
-/// 측정 흐름 단계 표시 (가이드 → 촬영 → 설문)
+/// 촬영 흐름 단계 표시 (가이드 → 촬영 → 설문)
 struct CaptureStepIndicator: View {
     let current: Int
     private let titles = ["촬영", "설문"]
@@ -163,7 +163,7 @@ struct CaptureGuideView: View {
     }
 }
 
-// MARK: - SCR-07 측정 중
+// MARK: - SCR-07 분석 중
 
 struct MeasuringOverlay: View {
     @State private var pulses = false

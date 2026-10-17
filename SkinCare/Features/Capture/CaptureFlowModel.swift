@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 측정 흐름(SCR-04~07) 상태. 흐름이 닫히면 이미지와 함께 사라진다.
+/// 촬영 흐름(SCR-04~07) 상태. 흐름이 닫히면 이미지와 함께 사라진다.
 @MainActor
 @Observable
 final class CaptureFlowModel {
@@ -16,7 +16,7 @@ final class CaptureFlowModel {
     private(set) var previewImage: UIImage?
     private(set) var imageError: String?
     private(set) var isProcessingImage = false
-    /// E2001·E2002로 돌아왔을 때 촬영 화면 상단 배너 (SCR-05)
+    /// E2001(얼굴 미검출, AI 미구현)·E2002로 돌아왔을 때 촬영 화면 상단 배너 (SCR-05)
     private(set) var retakeReason: String?
 
     var survey = Survey()

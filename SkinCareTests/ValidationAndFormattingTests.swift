@@ -41,7 +41,4 @@ struct FormattingTests {
         #expect(Formatting.leadingSentences(text) == "첫 문장이에요. 둘째 문장이에요.")
     }
 
-    @Test func apiDate() {
-        #expect(Formatting.apiDate("2026-10-15") == "2026.10.15")
-    }
 }

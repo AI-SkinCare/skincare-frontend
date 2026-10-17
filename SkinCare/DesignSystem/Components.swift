@@ -134,6 +134,8 @@ struct AppTextField: View {
 struct Chip: View {
     let title: String
     var isSelected = false
+    /// canvas-soft 카드 위에 놓일 때 true — 배경을 흰색으로 바꿔 구분되게 한다
+    var isOnSoftSurface = false
 
     var body: some View {
         Text(title)
@@ -141,7 +143,7 @@ struct Chip: View {
             .foregroundStyle(isSelected ? .onPrimary : .ink)
             .padding(.horizontal, Spacing.sm)
             .padding(.vertical, 6)
-            .background(isSelected ? Color.ink : Color.canvasSoft, in: Capsule())
+            .background(isSelected ? Color.ink : isOnSoftSurface ? Color.canvas : Color.canvasSoft, in: Capsule())
     }
 }
 
@@ -438,7 +440,7 @@ struct TabHeader<Trailing: View>: View {
     var body: some View {
         HStack(alignment: .center) {
             Text(title)
-                .font(Font.custom("Pretendard-Bold", size: 30, relativeTo: .largeTitle))
+                .appText(.tabTitle)
                 .foregroundStyle(.ink)
                 .accessibilityAddTraits(.isHeader)
             Spacer()
