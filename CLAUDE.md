@@ -47,6 +47,7 @@
 - 백엔드 없이 화면 확인: Debug 실행 인자 `-MockAPI -StartScreen <이름>` (README "실행" 참고). UI를 바꾸면 시뮬레이터 스크린샷으로 확인한다.
 - 실제 백엔드 개발 서버의 시나리오 재현: Debug 실행 인자 `-FixtureScenario <ok|uncertain|no-concern|rec-timeout|rec-slow|no-face|ai-down>` → `X-Fixture-Scenario` 헤더.
 - 글꼴은 `appText(_:)` 토큰(`display`·`tabTitle`·`heading3`…)을 쓰고, 비례 크기가 필요한 곳만 `Font.pretendard(_:size:)`. 화면 코드에 `"Pretendard-…"` 문자열 금지.
+- 커밋 전 린트: `/opt/homebrew/bin/swiftlint lint --quiet` (CI에서 error면 실패). Homebrew 도구는 이 셸 PATH에 없으니 전체 경로로 실행 (`/opt/homebrew/bin/gh` 등).
 - 빌드·테스트: `xcodebuild test -project SkinCare.xcodeproj -scheme SkinCare -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max'`
 - 화면 모델은 `@MainActor @Observable`, API 모델은 `Sendable`. 서버 열거형은 `UnknownCaseDecodable`로 모르는 값을 `unknown`으로 받는다.
 - 화면 문구는 화면 설계서 §4 문구 규칙(진단·치료 표현 금지)을 지킨다. 분류 라벨(질환명)은 그대로 표시하되 "참고 결과·진단 아님" 안내와 함께 쓴다. 고민 표기는 `Concern.displayLabel`만 쓰고 서버 label은 화면에 쓰지 않는다.
