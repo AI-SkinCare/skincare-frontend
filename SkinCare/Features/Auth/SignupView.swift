@@ -31,8 +31,7 @@ struct SignupView: View {
                 ScreenHeader(title: "계정을 만들어요.", subtitle: "분석 결과와 추천을 기록으로 모아 볼 수 있어요.")
 
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    LabeledField(title: "이메일",
-                                 message: emailError ?? (email.isEmpty || SignupValidation.isValidEmail(email) ? nil : "이메일 형식을 확인해 주세요.")) {
+                    LabeledField(title: "이메일", message: emailMessage) {
                         AppTextField(placeholder: "name@example.com", text: $email, keyboard: .emailAddress, contentType: .username)
                     }
                     LabeledField(title: "비밀번호",
@@ -79,6 +78,11 @@ struct SignupView: View {
         .sheet(isPresented: $showsPolicy) {
             if let url = AppConfig.privacyPolicyURL { SafariView(url: url).ignoresSafeArea() }
         }
+    }
+
+    private var emailMessage: String? {
+        if let emailError { return emailError }
+        return email.isEmpty || SignupValidation.isValidEmail(email) ? nil : "이메일 형식을 확인해 주세요."
     }
 
     private var agreements: some View {

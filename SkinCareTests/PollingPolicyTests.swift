@@ -1,5 +1,5 @@
-import Testing
 @testable import SkinCare
+import Testing
 
 struct PollingPolicyTests {
     @Test("처음 3분은 3초 간격", arguments: [0.0, 10, 179.9])

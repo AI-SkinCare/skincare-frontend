@@ -12,9 +12,10 @@ enum Formatting {
 
     /// 2026.10.15 18:12
     static func dateTime(_ date: Date) -> String {
-        date.formatted(
+        let hour = Date.FormatStyle.Symbol.VerbatimHour.twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)
+        return date.formatted(
             Date.VerbatimFormatStyle(
-                format: "\(year: .defaultDigits).\(month: .twoDigits).\(day: .twoDigits) \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)",
+                format: "\(year: .defaultDigits).\(month: .twoDigits).\(day: .twoDigits) \(hour: hour):\(minute: .twoDigits)",
                 timeZone: kst,
                 calendar: calendar
             )
@@ -49,8 +50,12 @@ enum Formatting {
 
     /// 10.15 (목)
     static func shortDay(_ date: Date) -> String {
-        let day = date.formatted(Date.VerbatimFormatStyle(format: "\(month: .twoDigits).\(day: .twoDigits)", timeZone: kst, calendar: calendar))
-        let weekday = date.formatted(Date.FormatStyle(locale: Locale(identifier: "ko_KR"), calendar: calendar, timeZone: kst).weekday(.abbreviated))
+        let day = date.formatted(
+            Date.VerbatimFormatStyle(format: "\(month: .twoDigits).\(day: .twoDigits)", timeZone: kst, calendar: calendar)
+        )
+        let weekday = date.formatted(
+            Date.FormatStyle(locale: Locale(identifier: "ko_KR"), calendar: calendar, timeZone: kst).weekday(.abbreviated)
+        )
         return "\(day) (\(weekday))"
     }
 

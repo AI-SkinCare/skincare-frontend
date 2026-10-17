@@ -1,9 +1,9 @@
 import CoreGraphics
 import Foundation
 import ImageIO
+@testable import SkinCare
 import Testing
 import UniformTypeIdentifiers
-@testable import SkinCare
 
 struct ImageProcessorTests {
     @Test("짧은 변 720px 미만이면 거부")

@@ -1,18 +1,21 @@
 #if DEBUG
+// 목 응답 분기가 많아 복잡도 규칙은 이 파일에서만 끈다 (Debug 전용)
+// swiftlint:disable cyclomatic_complexity function_parameter_count
 import Foundation
 
 /// `-MockAPI` 실행 시 백엔드 대신 응답한다. 응답 형식은 docs/new_common/api변경사항.md §1을 따른다.
 final class MockURLProtocol: URLProtocol {
-    override class func canInit(with request: URLRequest) -> Bool { true }
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override static func canInit(with request: URLRequest) -> Bool { true }
+    override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
         let (status, body) = MockServer.respond(to: request)
         // 로딩 상태가 보이도록 약간 지연 (URL 로딩 스레드에서 실행되므로 블로킹해도 무방)
-        Thread.sleep(forTimeInterval: request.url?.path().hasSuffix("/analyses") == true && request.httpMethod == "POST" ? 1.5 : 0.25)
-        guard let url = request.url else { return }
-        let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1",
-                                       headerFields: ["Content-Type": "application/json", "X-Request-Id": "mock-\(UUID().uuidString)"])!
+        let isSubmit = request.url?.path().hasSuffix("/analyses") == true && request.httpMethod == "POST"
+        Thread.sleep(forTimeInterval: isSubmit ? 1.5 : 0.25)
+        let headers = ["Content-Type": "application/json", "X-Request-Id": "mock-\(UUID().uuidString)"]
+        guard let url = request.url,
+              let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers) else { return }
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: body)
         client?.urlProtocolDidFinishLoading(self)
@@ -227,4 +230,5 @@ private enum MockServer {
         date.formatted(Date.ISO8601FormatStyle())
     }
 }
+// swiftlint:enable cyclomatic_complexity function_parameter_count
 #endif

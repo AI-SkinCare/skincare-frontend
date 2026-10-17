@@ -1,5 +1,5 @@
-import Testing
 @testable import SkinCare
+import Testing
 
 struct SignupValidationTests {
     @Test(arguments: ["user@example.com", "a.b+c@sub.domain.kr"])

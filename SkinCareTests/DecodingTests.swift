@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import SkinCare
+import Testing
 
 /// docs/new_common/api변경사항.md §1.4 예시 응답을 그대로 디코딩한다.
 struct DecodingTests {

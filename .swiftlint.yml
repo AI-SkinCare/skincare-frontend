@@ -3,8 +3,9 @@ included:
   - SkinCareTests
 
 line_length:
-  warning: 120
-  error: 160
+  # 한글 문구·SwiftUI 체이닝을 고려해 140 (패치 문서 §4.3)
+  warning: 140
+  error: 180
   ignores_urls: true
   ignores_comments: true
 
@@ -13,7 +14,10 @@ type_body_length:
 file_length:
   warning: 500
 identifier_name:
-  excluded: [id, x, y]
+  # 디자인 토큰(Spacing.xs 등)과 API 이름(me)
+  excluded: [id, x, y, xs, sm, md, lg, xl, me]
+type_name:
+  excluded: [Me]
 nesting:
   type_level: 2
 

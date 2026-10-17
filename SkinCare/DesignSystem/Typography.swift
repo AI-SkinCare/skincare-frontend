@@ -15,19 +15,33 @@ enum AppTextStyle {
     case label      // 12 / SemiBold / 1.33 — 배지·칩
     case caption    // 12 / Medium / 1.33 — 메타 정보
 
-    fileprivate var spec: (font: String, size: CGFloat, lineHeight: CGFloat, relativeTo: Font.TextStyle) {
+    fileprivate struct Spec {
+        let font: String
+        let size: CGFloat
+        let lineHeight: CGFloat
+        let relativeTo: Font.TextStyle
+
+        init(_ font: String, _ size: CGFloat, _ lineHeight: CGFloat, _ relativeTo: Font.TextStyle) {
+            self.font = font
+            self.size = size
+            self.lineHeight = lineHeight
+            self.relativeTo = relativeTo
+        }
+    }
+
+    fileprivate var spec: Spec {
         switch self {
-        case .display: ("Pretendard-Bold", 44, 1.1, .largeTitle)
-        case .tabTitle: ("Pretendard-Bold", 30, 1.2, .largeTitle)
-        case .heading3: ("Pretendard-Bold", 28, 1.2, .largeTitle)
-        case .heading4: ("Pretendard-Bold", 24, 1.25, .title)
-        case .title: ("Pretendard-SemiBold", 20, 1.3, .title3)
-        case .bodyLarge: ("Pretendard-Light", 20, 1.38, .title3)
-        case .body: ("Pretendard-Medium", 16, 1.38, .body)
-        case .bodySmall: ("Pretendard-Medium", 14, 1.43, .subheadline)
-        case .link: ("Pretendard-SemiBold", 16, 1.38, .body)
-        case .label: ("Pretendard-SemiBold", 12, 1.33, .caption)
-        case .caption: ("Pretendard-Medium", 12, 1.33, .caption)
+        case .display: Spec("Pretendard-Bold", 44, 1.1, .largeTitle)
+        case .tabTitle: Spec("Pretendard-Bold", 30, 1.2, .largeTitle)
+        case .heading3: Spec("Pretendard-Bold", 28, 1.2, .largeTitle)
+        case .heading4: Spec("Pretendard-Bold", 24, 1.25, .title)
+        case .title: Spec("Pretendard-SemiBold", 20, 1.3, .title3)
+        case .bodyLarge: Spec("Pretendard-Light", 20, 1.38, .title3)
+        case .body: Spec("Pretendard-Medium", 16, 1.38, .body)
+        case .bodySmall: Spec("Pretendard-Medium", 14, 1.43, .subheadline)
+        case .link: Spec("Pretendard-SemiBold", 16, 1.38, .body)
+        case .label: Spec("Pretendard-SemiBold", 12, 1.33, .caption)
+        case .caption: Spec("Pretendard-Medium", 12, 1.33, .caption)
         }
     }
 

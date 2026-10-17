@@ -402,8 +402,14 @@ struct FlowLayout: Layout {
         }
     }
 
+    private struct Item {
+        let index: Int
+        let x: CGFloat
+        let size: CGSize
+    }
+
     private struct Row {
-        var items: [(index: Int, x: CGFloat, size: CGSize)] = []
+        var items: [Item] = []
         var y: CGFloat = 0
         var width: CGFloat = 0
         var height: CGFloat = 0
@@ -421,7 +427,7 @@ struct FlowLayout: Layout {
                 row = rows[rows.count - 1]
             }
             let x = row.items.isEmpty ? 0 : row.width + spacing
-            row.items.append((index, x, size))
+            row.items.append(Item(index: index, x: x, size: size))
             row.width = x + size.width
             row.height = max(row.height, size.height)
             rows[rows.count - 1] = row

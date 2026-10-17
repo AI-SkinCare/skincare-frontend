@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import SkinCare
+import Testing
 
 /// 토큰 재발급 single-flight (설계서 §5, 패치 TC-IOS-05). URLProtocol 스텁을 공유하므로 직렬 실행.
 @Suite(.serialized)
@@ -25,10 +25,13 @@ struct APIClientTests {
             if request.url?.path().hasSuffix("/auth/refresh") == true {
                 counter.incrementRefresh()
                 Thread.sleep(forTimeInterval: 0.2) // 다른 요청들이 그 사이에 401을 받게
-                return .json(200, #"{"success":true,"data":{"accessToken":"new","expiresIn":3600,"user":{"id":1,"email":"a@b.c","nickname":"테스트"},"refreshToken":"r2"}}"#)
+                let user = #"{"id":1,"email":"a@b.c","nickname":"테스트"}"#
+                let session = #"{"accessToken":"new","expiresIn":3600,"user":"# + user + #","refreshToken":"r2"}"#
+                return .json(200, #"{"success":true,"data":"# + session + "}")
             }
             if request.value(forHTTPHeaderField: "Authorization") == "Bearer new" {
-                return .json(200, #"{"success":true,"data":{"aiAvailable":true,"queueLength":0,"estimatedWaitSec":null,"checkedAt":"2026-10-15T09:12:00Z"}}"#)
+                let status = #"{"aiAvailable":true,"queueLength":0,"estimatedWaitSec":null,"checkedAt":"2026-10-15T09:12:00Z"}"#
+                return .json(200, #"{"success":true,"data":"# + status + "}")
             }
             return .json(401, #"{"success":false,"error":{"code":"E1001","message":"토큰 만료"}}"#)
         }
@@ -113,13 +116,14 @@ struct StubResponse {
 final class StubURLProtocol: URLProtocol {
     nonisolated(unsafe) static var handler: (@Sendable (URLRequest) -> StubResponse)?
 
-    override class func canInit(with request: URLRequest) -> Bool { true }
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override static func canInit(with request: URLRequest) -> Bool { true }
+    override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
         guard let handler = Self.handler, let url = request.url else { return }
         let stub = handler(request)
-        let response = HTTPURLResponse(url: url, statusCode: stub.status, httpVersion: "HTTP/1.1", headerFields: stub.headers)!
+        guard let response = HTTPURLResponse(url: url, statusCode: stub.status, httpVersion: "HTTP/1.1",
+                                             headerFields: stub.headers) else { return }
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: stub.body)
         client?.urlProtocolDidFinishLoading(self)

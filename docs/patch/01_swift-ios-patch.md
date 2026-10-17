@@ -282,7 +282,7 @@
 
 | 원문 | 수정 |
 |------|------|
-| frontend: ESLint + Prettier, printWidth 100, singleQuote | **SwiftLint + swift-format**, 줄 길이 120 |
+| frontend: ESLint + Prettier, printWidth 100, singleQuote | **SwiftLint** (`.swiftlint.yml`), 줄 길이 140 (한글 문구·SwiftUI 체이닝 고려) |
 | TS 파일: kebab-case (`analysis-detail.page.tsx`) | Swift 파일: 타입 이름과 동일한 UpperCamelCase (`ReportView.swift`, `APIClient.swift`) |
 | JSON 필드 camelCase | 그대로. Swift 프로퍼티도 camelCase라 `CodingKeys` 변환 불필요 |
 
