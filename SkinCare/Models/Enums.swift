@@ -15,88 +15,43 @@ extension UnknownCaseDecodable {
     static var knownCases: [Self] { allCases.filter { $0 != unknownCase } }
 }
 
-// MARK: - 분석 상태 (API §6.1)
+// MARK: - 분석 상태 (API 변경사항 §1.4)
 
+/// 분석 작업 상태. 분석 `status`만 대문자다.
 enum AnalysisStatus: String, Codable, Sendable, UnknownCaseDecodable {
-    case queued, recommending, done, failed, unknown
+    case queued = "QUEUED"
+    case generating = "GENERATING"
+    case completed = "COMPLETED"
+    /// 추천 보류 — 오류가 아니다. 재요청 불가
+    case withheld = "WITHHELD"
+    case failed = "FAILED"
+    case unknown
     static let unknownCase = AnalysisStatus.unknown
 
-    var isInProgress: Bool { self == .queued || self == .recommending }
+    /// 폴링을 계속할 상태
+    var isInProgress: Bool { self == .queued || self == .generating }
 }
 
+/// AI 추천 결과 상태. COMPLETED·WITHHELD일 때만 값이 있다.
 enum RecommendationStatus: String, Codable, Sendable, UnknownCaseDecodable {
-    case pending, done, failed, unknown
+    case generated
+    /// 분류가 불확실해 보류 → 재촬영·상담 안내
+    case uncertain
+    /// 정상 분류 + 고른 고민 없음 → 설문에서 고민 선택 안내
+    case noConcern = "no_concern"
+    case unknown
     static let unknownCase = RecommendationStatus.unknown
 }
 
-// MARK: - 지표 · ROI · 등급
+// MARK: - 이미지 분류 (DenseNet121 6종)
 
-enum Metric: String, Codable, Sendable, UnknownCaseDecodable {
-    case moisture, elasticity, pigmentation, pore, unknown
-    static let unknownCase = Metric.unknown
+/// 분류 라벨 영문 코드. 화면에는 서버의 한글 `label`을 그대로 쓴다 (팀 결정).
+enum DiseaseClass: String, Codable, Sendable, UnknownCaseDecodable {
+    case psoriasis, atopic, acne, normal, rosacea, seborrheic, unknown
+    static let unknownCase = DiseaseClass.unknown
 
-    var displayName: String {
-        switch self {
-        case .moisture: "수분"
-        case .elasticity: "탄력"
-        case .pigmentation: "색소침착"
-        case .pore: "모공"
-        case .unknown: "기타"
-        }
-    }
-
-    /// 색소침착·모공은 원래 값이 낮을수록 좋다 (설계서 §4.5)
-    var lowerIsBetter: Bool { self == .pigmentation || self == .pore }
-}
-
-enum ROI: String, Codable, Sendable, UnknownCaseDecodable {
-    case fullFace = "full_face"
-    case forehead, glabella
-    case eyeLeft = "eye_left"
-    case eyeRight = "eye_right"
-    case cheekLeft = "cheek_left"
-    case cheekRight = "cheek_right"
-    case lip, chin, unknown
-    static let unknownCase = ROI.unknown
-
-    var displayName: String {
-        switch self {
-        case .fullFace: "얼굴 전체"
-        case .forehead: "이마"
-        case .glabella: "미간"
-        case .eyeLeft: "왼쪽 눈가"
-        case .eyeRight: "오른쪽 눈가"
-        case .cheekLeft: "왼쪽 볼"
-        case .cheekRight: "오른쪽 볼"
-        case .lip: "입가"
-        case .chin: "턱"
-        case .unknown: "기타 부위"
-        }
-    }
-}
-
-/// 등급은 백엔드가 계산해 내려준다 (설계서 §4.5). 앱은 표시만 한다.
-enum Grade: String, Codable, Sendable, UnknownCaseDecodable {
-    case good, normal, care, unknown
-    static let unknownCase = Grade.unknown
-
-    var label: String {
-        switch self {
-        case .good: "양호"
-        case .normal: "보통"
-        case .care: "관리 필요"
-        case .unknown: "-"
-        }
-    }
-
-    /// 종합 점수처럼 서버가 등급을 따로 주지 않는 값의 라벨용. 기준은 API §6.6과 같다.
-    init(score: Int) {
-        switch score {
-        case 70...: self = .good
-        case 40..<70: self = .normal
-        default: self = .care
-        }
-    }
+    /// `probabilities` 키 순서 (API 변경사항 §1.4 "위 순서")
+    static let displayOrder = ["건선", "아토피", "여드름", "정상", "주사", "지루"]
 }
 
 // MARK: - 피부 프로필 (API §6.3, §6.4)
@@ -116,11 +71,12 @@ enum SkinType: String, Codable, Sendable, UnknownCaseDecodable {
     }
 }
 
+/// 설문 고민 8종. 정상으로 분류되면 고른 고민이 추천 대상이 된다.
 enum Concern: String, Codable, Sendable, UnknownCaseDecodable {
     case pigmentation, pore, wrinkle, acne, redness, dryness, sagging, sensitivity, unknown
     static let unknownCase = Concern.unknown
 
-    /// API §6.4 "화면 표기" — 의료 용어로 읽히지 않는 사용자용 표현
+    /// API §6.4 "화면 표기"
     var displayLabel: String {
         switch self {
         case .pigmentation: "피부 톤·잡티"

@@ -28,7 +28,7 @@ struct SignupView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xl) {
-                ScreenHeader(title: "계정을 만들어요.", subtitle: "측정 기록을 모아 변화를 볼 수 있어요.")
+                ScreenHeader(title: "계정을 만들어요.", subtitle: "분석 결과와 추천을 기록으로 모아 볼 수 있어요.")
 
                 VStack(alignment: .leading, spacing: Spacing.md) {
                     LabeledField(title: "이메일",
@@ -51,7 +51,7 @@ struct SignupView: View {
                 if let formError {
                     Label(formError, systemImage: "exclamationmark.circle")
                         .appText(.bodySmall)
-                        .foregroundStyle(.gradeCare)
+                        .foregroundStyle(.negative)
                 }
             }
             .padding(.horizontal, Spacing.screen)
@@ -153,7 +153,7 @@ private struct LabeledField<Field: View>: View {
             if let message {
                 Text(message)
                     .appText(.caption)
-                    .foregroundStyle(.gradeCare)
+                    .foregroundStyle(.negative)
                     .transition(.opacity)
             }
         }

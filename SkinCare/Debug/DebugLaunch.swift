@@ -10,12 +10,13 @@ import Foundation
 enum DebugLaunch {
     enum StartScreen: String {
         case login, signup, home, guide, capture, camera, survey
-        case reportDone = "report-done"
+        case reportCompleted = "report-completed"
         case reportQueued = "report-queued"
-        case reportRecommending = "report-recommending"
+        case reportGenerating = "report-generating"
+        case reportUncertain = "report-uncertain"
+        case reportNoConcern = "report-no-concern"
         case reportFailed = "report-failed"
-        case reportDemo = "report-demo"
-        case recommendation, trend, history, mypage
+        case recommendation, history, mypage
     }
 
     private static let arguments = ProcessInfo.processInfo.arguments
@@ -42,26 +43,23 @@ enum DebugLaunch {
 
     @MainActor
     static func applyStartScreen(to router: AppRouter) {
+        let reportIDs: [StartScreen: String] = [
+            .reportCompleted: MockData.completedID, .reportQueued: MockData.queuedID,
+            .reportGenerating: MockData.generatingID, .reportUncertain: MockData.uncertainID,
+            .reportNoConcern: MockData.noConcernID, .reportFailed: MockData.failedID,
+        ]
         switch startScreen {
         case .guide, .capture, .camera, .survey:
             router.isCaptureFlowPresented = true
-        case .reportDone, .reportDemo:
-            router.homePath = [.report(analysisID: startScreen == .reportDemo ? MockData.demoID : MockData.doneID)]
-        case .reportQueued:
-            router.homePath = [.report(analysisID: MockData.queuedID)]
-        case .reportRecommending:
-            router.homePath = [.report(analysisID: MockData.recommendingID)]
-        case .reportFailed:
-            router.homePath = [.report(analysisID: MockData.failedID)]
         case .recommendation:
-            router.homePath = [.report(analysisID: MockData.doneID), .recommendation(analysisID: MockData.doneID)]
-        case .trend:
-            router.homePath = [.report(analysisID: MockData.doneID), .trend(analysisID: MockData.doneID)]
+            router.homePath = [.report(analysisID: MockData.completedID), .recommendation(analysisID: MockData.completedID)]
         case .history:
             router.selectedTab = .history
         case .mypage:
             router.selectedTab = .myPage
-        case .login, .signup, .home, nil:
+        case let screen?:
+            if let id = reportIDs[screen] { router.homePath = [.report(analysisID: id)] }
+        case nil:
             break
         }
     }

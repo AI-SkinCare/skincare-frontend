@@ -178,80 +178,7 @@ struct PressableStyle: ButtonStyle {
     }
 }
 
-/// "데모 값" 배지 (FR-MEA-04). 실측처럼 보이면 안 되므로 눈에 띄게 ink 채움.
-struct DemoBadge: View {
-    var body: some View {
-        Text("데모 값")
-            .appText(.label)
-            .foregroundStyle(.onPrimary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(Color.ink, in: Capsule())
-            .accessibilityLabel("데모 값, 실제 측정값이 아님")
-    }
-}
-
-/// 등급 점 + 글자 라벨. 색만으로 구분하지 않는다 (화면 설계서 §5).
-struct GradeTag: View {
-    let grade: Grade
-    var isFilled = false
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Circle().fill(grade.color).frame(width: 7, height: 7)
-            Text(grade.label).appText(.label).foregroundStyle(.ink)
-        }
-        .padding(.horizontal, isFilled ? 10 : 0)
-        .padding(.vertical, isFilled ? 5 : 0)
-        .background(isFilled ? Color.canvasSoft : Color.clear, in: Capsule())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("등급 \(grade.label)")
-    }
-}
-
-// MARK: - 점수 시각화
-
-/// 종합 점수 링. ink 진행 + canvas-soft 트랙.
-struct ScoreRing: View {
-    let score: Int
-    var size: CGFloat = 196
-    var lineWidth: CGFloat = 12
-    var showsLabel = true
-
-    @State private var progress: CGFloat = 0
-
-    var body: some View {
-        let target = CGFloat(min(max(score, 0), 100)) / 100
-        ZStack {
-            Circle().stroke(Color.canvasSoft, lineWidth: lineWidth)
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(Color.ink, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-            if showsLabel {
-                VStack(spacing: 2) {
-                    Text("\(score)")
-                        .appText(.heading1)
-                        .foregroundStyle(.ink)
-                        .contentTransition(.numericText())
-                    Text("/ 100").appText(.caption).foregroundStyle(.textMuted)
-                }
-            } else {
-                Text("\(score)")
-                    .font(Font.custom("Pretendard-Bold", size: size * 0.32))
-                    .foregroundStyle(.ink)
-            }
-        }
-        .frame(width: size, height: size)
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.8)) { progress = target }
-        }
-        .onChange(of: score) { withAnimation(.easeOut(duration: 0.4)) { progress = target } }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("종합 점수")
-        .accessibilityValue("100점 만점에 \(score)점")
-    }
-}
+// MARK: - 점수 막대
 
 /// 0–100 막대
 struct ProgressBar: View {
@@ -326,12 +253,12 @@ struct MenuRow<Trailing: View>: View {
                 if let systemImage {
                     Image(systemName: systemImage)
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(role == .destructive ? .gradeCare : .ink)
+                        .foregroundStyle(role == .destructive ? .negative : .ink)
                         .frame(width: 24)
                 }
                 Text(title)
                     .appText(.body)
-                    .foregroundStyle(role == .destructive ? .gradeCare : .ink)
+                    .foregroundStyle(role == .destructive ? .negative : .ink)
                 Spacer()
                 trailing
             }

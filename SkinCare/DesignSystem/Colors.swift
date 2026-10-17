@@ -34,19 +34,6 @@ extension ShapeStyle where Self == Color {
     static var textMuted: Color { Color(hex: 0x707070) }
     static var textFaint: Color { Color(hex: 0xADADAD) }
 
-    // Semantic — 앱 추가 (design.md §App Additions). 등급 점·라벨·추이 화살표에만 쓴다.
-    static var gradeGood: Color { Color(hex: 0x1E9E5A) }
-    static var gradeNormal: Color { Color(hex: 0xE0A400) }
-    static var gradeCare: Color { Color(hex: 0xEE6A1F) }
-}
-
-extension Grade {
-    var color: Color {
-        switch self {
-        case .good: .gradeGood
-        case .normal: .gradeNormal
-        case .care: .gradeCare
-        case .unknown: .textFaint
-        }
-    }
+    // Semantic — 앱 추가 (design.md §App Additions). 오류 문구·삭제 동작에만 쓴다.
+    static var negative: Color { Color(hex: 0xEE6A1F) }
 }

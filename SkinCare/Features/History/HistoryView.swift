@@ -18,7 +18,7 @@ struct HistoryView: View {
         .toolbar(.hidden, for: .navigationBar)
         .task { await model.reload(api: api) }
         .confirmationDialog(
-            "이 측정 기록을 삭제할까요?",
+            "이 분석 기록을 삭제할까요?",
             isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
             titleVisibility: .visible,
             presenting: pendingDelete
@@ -36,9 +36,9 @@ struct HistoryView: View {
         Group {
             if model.items.isEmpty, model.hasLoaded {
                 VStack(spacing: Spacing.lg) {
-                    EmptyStateView(systemImage: "chart.line.uptrend.xyaxis", title: "아직 측정 기록이 없어요.",
-                                   message: "측정하면 여기에 기록이 쌓이고\n변화를 비교할 수 있어요.")
-                    Button("피부 측정 시작") { router.isCaptureFlowPresented = true }
+                    EmptyStateView(systemImage: "clock.arrow.circlepath", title: "아직 분석 기록이 없어요.",
+                                   message: "분석하면 여기에 기록이 쌓여요.")
+                    Button("피부 분석 시작") { router.isCaptureFlowPresented = true }
                         .buttonStyle(.primary)
                         .padding(.horizontal, Spacing.xxl)
                 }
@@ -92,7 +92,7 @@ struct HistoryView: View {
         .listRowInsets(EdgeInsets(top: Spacing.xxs, leading: Spacing.screen, bottom: Spacing.xxs, trailing: Spacing.screen))
         .swipeActions {
             Button("삭제") { pendingDelete = item }
-                .tint(.gradeCare)
+                .tint(.negative)
         }
         .onAppear {
             if item.id == model.items.last?.id { Task { await model.loadMore(api: api) } }
@@ -106,25 +106,14 @@ private struct HistoryRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            ScoreRing(score: item.overallScore, size: 52, lineWidth: 5, showsLabel: false)
+            DiseaseTile(disease: item.disease, size: 52)
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: Spacing.xs) {
-                    Text(Formatting.shortDay(item.createdAt)).appText(.link).foregroundStyle(.ink)
-                    GradeTag(grade: Grade(score: item.overallScore))
-                    if item.isDemo { DemoBadge() }
+                    Text(item.disease.label).appText(.link).foregroundStyle(.ink)
+                    Text(Formatting.shortDay(item.createdAt)).appText(.caption).foregroundStyle(.textMuted)
                 }
-                if let status = statusLabel {
-                    HStack(spacing: 6) {
-                        if item.status.isInProgress { ProgressView().controlSize(.mini).tint(.ink) }
-                        Text(status).appText(.caption).foregroundStyle(item.status == .failed ? .gradeCare : .ink)
-                    }
-                } else if !item.concerns.isEmpty {
-                    Text(item.concerns.filter { $0 != .unknown }.map(\.displayLabel).joined(separator: " · "))
-                        .appText(.caption)
-                        .foregroundStyle(.textMuted)
-                        .lineLimit(1)
-                }
+                AnalysisStatusLine(status: item.status, recommendationStatus: item.recommendationStatus, concerns: item.concerns)
             }
 
             Spacer(minLength: 0)
@@ -147,14 +136,6 @@ private struct HistoryRow: View {
         }
         .card(.outlined, padding: Spacing.md, radius: Radius.sm)
         .contentShape(Rectangle())
-    }
-
-    private var statusLabel: String? {
-        switch item.status {
-        case .queued, .recommending: "맞춤 추천 작성 중"
-        case .failed: "추천을 만들지 못했어요"
-        default: nil
-        }
     }
 }
 

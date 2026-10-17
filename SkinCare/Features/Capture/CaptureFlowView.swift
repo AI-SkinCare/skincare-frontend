@@ -99,14 +99,14 @@ struct CaptureGuideView: View {
     private let rules: [(icon: String, title: String, detail: String)] = [
         ("person.crop.square", "정면을 봐 주세요", "얼굴 전체가 화면 가운데에 오도록 찍어요."),
         ("sun.max", "자연광에서 찍어 주세요", "그늘이나 역광을 피하고 밝은 곳에서 찍어요."),
-        ("eyeglasses", "화장과 안경은 벗어 주세요", "맨얼굴일 때 더 정확하게 측정돼요."),
+        ("eyeglasses", "화장과 안경은 벗어 주세요", "맨얼굴일 때 더 정확하게 분석돼요."),
         ("comb", "앞머리를 넘겨 주세요", "이마가 가려지지 않게 정리해요."),
     ]
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xl) {
-                ScreenHeader(title: "이렇게 찍어 주세요.", subtitle: "정확한 측정을 위한 네 가지예요.")
+                ScreenHeader(title: "이렇게 찍어 주세요.", subtitle: "정확한 분석을 위한 네 가지예요.")
 
                 VStack(spacing: 0) {
                     ForEach(Array(rules.enumerated()), id: \.offset) { index, rule in
@@ -187,7 +187,7 @@ struct MeasuringOverlay: View {
             .frame(height: 200)
 
             VStack(spacing: Spacing.xs) {
-                Text("피부 상태를 측정하고 있어요.")
+                Text("사진을 분석하고 있어요.")
                     .appText(.title)
                     .foregroundStyle(.ink)
                 Text("보통 몇 초면 끝나요. 화면을 닫지 말아 주세요.")

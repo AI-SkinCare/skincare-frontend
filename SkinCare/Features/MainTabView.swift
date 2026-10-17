@@ -41,7 +41,6 @@ extension View {
             switch route {
             case .report(let id): ReportView(analysisID: id)
             case .recommendation(let id): RecommendationView(analysisID: id)
-            case .trend(let id): TrendView(analysisID: id)
             }
         }
     }

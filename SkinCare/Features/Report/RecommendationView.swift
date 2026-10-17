@@ -4,16 +4,16 @@ import SwiftUI
 struct RecommendationView: View {
     let analysisID: String
     @Environment(\.api) private var api
-    @State private var detail: AnalysisDetail?
+    @State private var analysis: AnalysisView?
     @State private var errorMessage: String?
 
     var body: some View {
         Group {
-            if let recommendation = detail?.recommendation, recommendation.status == .done {
+            if analysis?.status == .completed, let recommendation = analysis?.recommendation {
                 content(recommendation)
             } else if let errorMessage {
                 ErrorStateView(message: errorMessage) { Task { await load() } }
-            } else if detail != nil {
+            } else if analysis != nil {
                 ErrorStateView(message: "아직 추천이 준비되지 않았어요.") { Task { await load() } }
             } else {
                 LoadingStateView()
@@ -28,7 +28,7 @@ struct RecommendationView: View {
 
     private func load() async {
         do {
-            detail = try await api.send(AnalysisAPI.detail(id: analysisID))
+            analysis = try await api.send(AnalysisAPI.detail(id: analysisID))
             errorMessage = nil
         } catch {
             errorMessage = error.userMessage
@@ -205,7 +205,8 @@ private struct ReasoningSection: View {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
                         HStack(spacing: Spacing.xs) {
                             Text("0\(index + 1)").appText(.label).foregroundStyle(.textFaint)
-                            if index < titles.count {
+                            // 3단계 설명일 때만 단계 제목을 붙인다 (개수 고정 아님)
+                            if paragraphs.count == titles.count {
                                 Text(titles[index]).appText(.link).foregroundStyle(.ink)
                             }
                         }

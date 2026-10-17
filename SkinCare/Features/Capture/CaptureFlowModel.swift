@@ -87,7 +87,8 @@ final class CaptureFlowModel {
             case "E2001":
                 returnToCapture(reason: "얼굴을 찾지 못했어요. 정면에서 다시 찍어 주세요.")
             case "E2002":
-                returnToCapture(reason: "사진이 흐리거나 너무 어두워요. 밝은 곳에서 다시 찍어 주세요.")
+                // 해상도 부족·흐림·저조도·디코딩 실패 (API 변경사항 §2.8)
+                returnToCapture(reason: "사진을 제대로 읽지 못했어요. 밝은 곳에서 선명하게 다시 찍어 주세요.")
             case "E3001":
                 aiAvailable = false
                 alert = AlertItem(title: "분석 서버 점검 중", message: "지금은 분석 서버 점검 중이에요. 잠시 후 다시 시도해 주세요.")

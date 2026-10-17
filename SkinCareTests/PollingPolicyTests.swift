@@ -7,13 +7,19 @@ struct PollingPolicyTests {
         #expect(PollingPolicy.interval(elapsed: elapsed) == 3)
     }
 
-    @Test("3분부터 15분 전까지 10초 간격", arguments: [180.0, 600, 899.9])
+    @Test("3분부터 30분 전까지 10초 간격", arguments: [180.0, 900, 1799.9])
     func slowInterval(elapsed: Double) {
         #expect(PollingPolicy.interval(elapsed: elapsed) == 10)
     }
 
-    @Test("15분이 지나면 중단", arguments: [900.0, 3600])
+    @Test("30분이 지나면 중단", arguments: [1800.0, 3600])
     func timeout(elapsed: Double) {
         #expect(PollingPolicy.interval(elapsed: elapsed) == nil)
+    }
+
+    @Test("150초부터 지연 안내")
+    func delayNotice() {
+        #expect(!PollingPolicy.showsDelayNotice(elapsed: 149))
+        #expect(PollingPolicy.showsDelayNotice(elapsed: 150))
     }
 }

@@ -44,12 +44,4 @@ struct FormattingTests {
     @Test func apiDate() {
         #expect(Formatting.apiDate("2026-10-15") == "2026.10.15")
     }
-
-    @Test("종합 점수 등급 경계 (API §6.6)")
-    func gradeBoundaries() {
-        #expect(Grade(score: 70) == .good)
-        #expect(Grade(score: 69) == .normal)
-        #expect(Grade(score: 40) == .normal)
-        #expect(Grade(score: 39) == .care)
-    }
 }

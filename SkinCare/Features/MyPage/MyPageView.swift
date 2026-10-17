@@ -43,7 +43,7 @@ struct MyPageView: View {
             Button("탈퇴하기", role: .destructive) { Task { await deleteAccount() } }
             Button("취소", role: .cancel) {}
         } message: {
-            Text("모든 측정 기록이 바로 삭제되고 되돌릴 수 없어요.")
+            Text("모든 분석 기록이 바로 삭제되고 되돌릴 수 없어요.")
         }
         .alert($alert)
     }
@@ -67,7 +67,7 @@ struct MyPageView: View {
 
     private var stats: some View {
         HStack(spacing: 0) {
-            statItem(title: "누적 측정", value: me.map { "\($0.analysisCount)회" } ?? "-")
+            statItem(title: "누적 분석", value: me.map { "\($0.analysisCount)회" } ?? "-")
             Rectangle().fill(Color.hairline).frame(width: 1, height: 32)
             statItem(title: "함께한 날", value: me.map { Formatting.date($0.createdAt) } ?? "-")
         }

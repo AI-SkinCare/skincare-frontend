@@ -11,7 +11,7 @@ struct AuthSession: Decodable, Sendable {
     let accessToken: String
     let expiresIn: Int
     let user: User
-    /// 패치 A2 합의 후 `X-Client: ios`일 때만 내려온다. 그 전에는 nil (쿠키 방식).
+    /// `X-Client: ios`일 때 내려온다 (패치 A2, 백엔드 반영 완료). 쿠키 `refresh_token`도 함께 온다.
     let refreshToken: String?
 }
 
@@ -45,5 +45,6 @@ struct SystemStatus: Decodable, Sendable {
     let aiAvailable: Bool
     let queueLength: Int
     let estimatedWaitSec: Int?
-    let checkedAt: Date
+    /// 첫 헬스체크 전이면 null
+    let checkedAt: Date?
 }

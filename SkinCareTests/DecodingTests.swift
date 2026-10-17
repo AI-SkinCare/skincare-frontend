@@ -2,53 +2,85 @@ import Foundation
 import Testing
 @testable import SkinCare
 
-/// API 명세 §4.2 예시 응답을 그대로 디코딩한다.
+/// docs/new_common/api변경사항.md §1.4 예시 응답을 그대로 디코딩한다.
 struct DecodingTests {
     private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
         try JSONCoding.decoder().decode(type, from: Data(json.utf8))
     }
 
-    @Test("완료된 분석 상세")
-    func analysisDetailDone() throws {
-        let detail = try decode(AnalysisDetail.self, Fixtures.analysisDone)
-        #expect(detail.status == .done)
-        #expect(detail.measurement.overallScore == 63)
-        #expect(detail.measurement.summary.map(\.metric) == [.moisture, .elasticity, .pigmentation, .pore])
-        #expect(detail.measurement.summary[2].value == 38)
-        #expect(detail.measurement.summary[2].score == 62)
-        #expect(detail.measurement.byRoi.first?.roi == .forehead)
-        #expect(detail.recommendation.skinType?.code == .combination)
-        #expect(detail.recommendation.concerns?.map(\.code) == [.pore, .pigmentation])
-        #expect(detail.recommendation.ingredients?.count == 3)
-        #expect(detail.recommendation.routine?.first?.time == .morning)
-        #expect(detail.recommendation.reasoning?.count == 3)
-        #expect(detail.survey?.gender == .female)
-        #expect(detail.survey?.ageBand == .twenties)
+    @Test("COMPLETED: 분류 + 추천 + 안내문")
+    func completed() throws {
+        let analysis = try decode(AnalysisView.self, Fixtures.completed)
+        #expect(analysis.status == .completed)
+        #expect(!analysis.status.isInProgress)
+        #expect(analysis.disease.label == "아토피")
+        #expect(analysis.disease.labelEn == .atopic)
+        #expect(analysis.disease.confidencePercent == "90%")
+        #expect(analysis.disease.orderedProbabilities.map(\.label) == ["건선", "아토피", "여드름", "정상", "주사", "지루"])
+        #expect(analysis.recommendationStatus == .generated)
+        #expect(analysis.recommendation?.skinType?.code == .dry)
+        #expect(analysis.recommendation?.concerns?.map(\.code) == [.sensitivity])
+        #expect(analysis.recommendation?.ingredients?.count == 2)
+        #expect(analysis.recommendation?.ingredients?.last?.purpose == nil)
+        #expect(analysis.recommendation?.routine?.first?.time == .anytime)
+        #expect(analysis.guidance.count == 2)
+        #expect(analysis.survey?.ageBand == .twenties)
     }
 
-    @Test("추천 대기 중이면 recommendation은 status만 온다")
-    func analysisDetailPending() throws {
-        let detail = try decode(AnalysisDetail.self, Fixtures.analysisPending)
-        #expect(detail.status == .queued)
-        #expect(detail.status.isInProgress)
-        #expect(detail.recommendation.status == .pending)
-        #expect(detail.recommendation.ingredients == nil)
-        #expect(detail.queuePosition == 2)
-        #expect(detail.measurement.isDemo)
-        #expect(detail.measurement.byRoi.isEmpty)
+    @Test("QUEUED: 추천·추천 상태 null, guidance 빈 배열, 대기 순번")
+    func queued() throws {
+        let analysis = try decode(AnalysisView.self, Fixtures.queued)
+        #expect(analysis.status == .queued)
+        #expect(analysis.status.isInProgress)
+        #expect(analysis.recommendationStatus == nil)
+        #expect(analysis.recommendation == nil)
+        #expect(analysis.guidance.isEmpty)
+        #expect(analysis.queuePosition == 2)
+        #expect(analysis.completedAt == nil)
+    }
+
+    @Test("WITHHELD: 보류 사유별 추천 상태", arguments: [("uncertain", RecommendationStatus.uncertain),
+                                                      ("no_concern", RecommendationStatus.noConcern)])
+    func withheld(raw: String, expected: RecommendationStatus) throws {
+        let analysis = try decode(AnalysisView.self, Fixtures.withheld(recommendationStatus: raw))
+        #expect(analysis.status == .withheld)
+        #expect(analysis.recommendationStatus == expected)
+        #expect(analysis.recommendation == nil)
+        #expect(analysis.disease.uncertain == (raw == "uncertain"))
+    }
+
+    @Test("FAILED: error 객체")
+    func failed() throws {
+        let analysis = try decode(AnalysisView.self, Fixtures.failed)
+        #expect(analysis.status == .failed)
+        #expect(analysis.error?.code == "E3002")
+    }
+
+    @Test("이력 항목")
+    func listItem() throws {
+        let page = try decode(AnalysisPage.self, """
+        { "items": [ { "analysisId": "01J9", "createdAt": "2026-10-16T09:12:33Z", "status": "WITHHELD",
+                       "recommendationStatus": "no_concern", "disease": \(Fixtures.diseaseNormal), "concerns": [] } ],
+          "page": { "page": 1, "size": 20, "totalItems": 1, "totalPages": 1 } }
+        """)
+        #expect(page.items.first?.disease.label == "정상")
+        #expect(page.items.first?.recommendationStatus == .noConcern)
     }
 
     @Test("모르는 열거형 값은 unknown으로 받는다")
     func unknownEnumValues() throws {
-        let item = try decode(AnalysisListItem.self, """
-        { "analysisId": "01J9", "createdAt": "2026-10-15T09:12:33.000Z", "status": "archived",
-          "overallScore": 50, "isDemo": false, "concerns": ["pore", "freckles"] }
+        let page = try decode(AnalysisPage.self, """
+        { "items": [ { "analysisId": "01J9", "createdAt": "2026-10-16T09:12:33Z", "status": "ARCHIVED",
+                       "recommendationStatus": "skipped", "disease": \(Fixtures.diseaseNormal), "concerns": ["pore", "freckles"] } ],
+          "page": { "page": 1, "size": 20, "totalItems": 1, "totalPages": 1 } }
         """)
+        let item = try #require(page.items.first)
         #expect(item.status == .unknown)
+        #expect(item.recommendationStatus == .unknown)
         #expect(item.concerns == [.pore, .unknown])
     }
 
-    @Test("날짜: 밀리초 있음·없음 모두 받는다")
+    @Test("날짜: 밀리초 있음·없음, checkedAt null")
     func dates() throws {
         let withMillis = try decode(SystemStatus.self, """
         { "aiAvailable": true, "queueLength": 0, "estimatedWaitSec": null, "checkedAt": "2026-10-15T09:12:00.123Z" }
@@ -56,8 +88,14 @@ struct DecodingTests {
         let withoutMillis = try decode(SystemStatus.self, """
         { "aiAvailable": false, "queueLength": 3, "estimatedWaitSec": 165, "checkedAt": "2026-10-15T09:12:00Z" }
         """)
-        #expect(abs(withMillis.checkedAt.timeIntervalSince(withoutMillis.checkedAt) - 0.123) < 0.001)
-        #expect(Formatting.dateTime(withoutMillis.checkedAt) == "2026.10.15 18:12")
+        let beforeHealthCheck = try decode(SystemStatus.self, """
+        { "aiAvailable": false, "queueLength": 0, "estimatedWaitSec": null, "checkedAt": null }
+        """)
+        let millis = try #require(withMillis.checkedAt)
+        let plain = try #require(withoutMillis.checkedAt)
+        #expect(abs(millis.timeIntervalSince(plain) - 0.123) < 0.001)
+        #expect(Formatting.dateTime(plain) == "2026.10.15 18:12")
+        #expect(beforeHealthCheck.checkedAt == nil)
     }
 
     @Test("설문 인코딩: 빈 값은 보내지 않는다")
@@ -73,84 +111,92 @@ struct DecodingTests {
         #expect(!json.contains("note"))
         #expect(!json.contains("skinType"))
     }
+
+    @Test("모델 분류 점수 백분율")
+    func percent() {
+        #expect(Disease.percent(0.554) == "55%")
+        #expect(Disease.percent(1.2) == "100%")
+        #expect(Disease.percent(-0.1) == "0%")
+    }
 }
 
 enum Fixtures {
-    static let analysisDone = """
+    static let diseaseAtopic = """
+    { "label": "아토피", "labelEn": "atopic", "confidence": 0.9, "uncertain": false,
+      "probabilities": { "건선": 0.02, "아토피": 0.9, "여드름": 0.02, "정상": 0.02, "주사": 0.02, "지루": 0.02 },
+      "modelVersion": "densenet121_s2_3ea9506", "inferenceMs": 45 }
+    """
+
+    static let diseaseNormal = """
+    { "label": "정상", "labelEn": "normal", "confidence": 0.9, "uncertain": false,
+      "probabilities": { "건선": 0.02, "아토피": 0.02, "여드름": 0.02, "정상": 0.9, "주사": 0.02, "지루": 0.02 },
+      "modelVersion": "densenet121_s2_3ea9506", "inferenceMs": 45 }
+    """
+
+    static let diseaseUncertain = """
+    { "label": "아토피", "labelEn": "atopic", "confidence": 0.55, "uncertain": true,
+      "probabilities": { "건선": 0.09, "아토피": 0.55, "여드름": 0.09, "정상": 0.09, "주사": 0.09, "지루": 0.09 },
+      "modelVersion": "densenet121_s2_3ea9506", "inferenceMs": 45 }
+    """
+
+    static let completed = """
     {
       "analysisId": "01J9Z3K5V8Q2M4N6P8R0S2T4V6",
-      "status": "done",
-      "createdAt": "2026-10-15T09:12:33Z",
-      "completedAt": "2026-10-15T09:13:31Z",
-      "deviceType": "smartphone",
+      "status": "COMPLETED",
+      "disease": \(diseaseAtopic),
+      "recommendationStatus": "generated",
+      "recommendation": {
+        "skinType": { "code": "dry", "label": "건성" },
+        "concerns": [{ "code": "sensitivity", "label": "민감성(트러블/자극감)" }],
+        "ingredients": [{ "name": "쑥잎 추출물", "purpose": "진정에 도움을 줄 수 있어요.", "priority": 1 },
+                        { "name": "대나무추출물", "purpose": null, "priority": 2 }],
+        "routine": [{ "step": 1, "time": "anytime", "action": "자극이 적은 제품을 써요." }],
+        "reasoning": ["첫째", "둘째", "셋째"],
+        "answer": "요약", "inputNotes": ["나이 추정"], "disclaimer": "참고 정보",
+        "filtered": true, "usedFallback": false, "modelVersion": "rec_sllm_v2", "inferenceMs": 47038
+      },
+      "guidance": [
+        "이미지 모델의 6종 분류 참고 결과이며 의학적 진단이 아닙니다. 분류 점수만으로 다른 질환을 배제할 수 없습니다.",
+        "성분 추천은 화장품 수준의 보조 관리 정보입니다. 질환 확인과 치료는 피부과 전문의와 상담하세요."
+      ],
+      "error": null,
       "queuePosition": null,
       "estimatedWaitSec": null,
-      "measurement": {
-        "isDemo": false, "confidence": 0.87, "calibrationApplied": true, "overallScore": 63,
-        "summary": [
-          { "metric": "moisture",     "value": 61, "score": 61, "grade": "normal" },
-          { "metric": "elasticity",   "value": 74, "score": 74, "grade": "good" },
-          { "metric": "pigmentation", "value": 38, "score": 62, "grade": "normal" },
-          { "metric": "pore",         "value": 45, "score": 55, "grade": "normal" }
-        ],
-        "byRoi": [
-          { "roi": "forehead", "moisture": 58, "elasticity": 71, "pigmentation": 35, "pore": 51, "overallScore": 61, "grade": "normal" },
-          { "roi": "cheek_left", "moisture": 66, "elasticity": 76, "pigmentation": 41, "pore": 38, "overallScore": 66, "grade": "normal" }
-        ],
-        "modelVersion": "skin_reg_v1"
-      },
-      "recommendation": {
-        "status": "done",
-        "skinType": { "code": "combination", "label": "복합성" },
-        "concerns": [
-          { "code": "pore", "label": "모공" },
-          { "code": "pigmentation", "label": "미백(색소침착/기미/칙칙함)" }
-        ],
-        "ingredients": [
-          { "name": "나이아신아마이드", "purpose": "피지 분비와 모공 관리에 도움을 줄 수 있습니다.", "priority": 1 },
-          { "name": "판테놀", "purpose": "피부 장벽을 지키는 데 도움을 줄 수 있습니다.", "priority": 2 },
-          { "name": "알로에신", "purpose": null, "priority": 3 }
-        ],
-        "routine": [
-          { "step": 1, "time": "morning", "action": "약산성 클렌저로 가볍게 세안합니다." },
-          { "step": 2, "time": "morning", "action": "자외선 차단제를 바릅니다." },
-          { "step": 3, "time": "evening", "action": "나이아신아마이드 세럼을 바릅니다." }
-        ],
-        "reasoning": ["첫째 문단입니다.", "둘째 문단입니다.", "셋째 문단입니다."],
-        "answer": "복합성 피부에 모공과 톤이 고민이라면 가벼운 보습이 좋아요. 자외선 차단도 챙겨 주세요. 세 번째 문장입니다.",
-        "inputNotes": ["나이는 연령대(20s) 중간값 25세로 추정"],
-        "disclaimer": "본 결과는 참고용 정보이며 의학적 진단이나 치료를 대신하지 않습니다. 피부 이상이 지속되면 피부과 전문의와 상담하세요.",
-        "filtered": false,
-        "usedFallback": false,
-        "modelVersion": "rec_sllm_v2"
-      },
-      "survey": {
-        "gender": "female", "ageBand": "20s", "skinType": "combination", "sleepHours": 6,
-        "waterIntakeLevel": "low", "sunExposureLevel": "high", "stressLevel": "medium",
-        "concerns": ["pore", "pigmentation"], "currentProducts": ["토너", "수분크림"], "note": "여름에 번들거림이 심해요"
-      },
-      "error": null
+      "createdAt": "2026-10-16T09:12:33Z",
+      "completedAt": "2026-10-16T09:13:21Z",
+      "survey": { "gender": "female", "ageBand": "20s", "skinType": "dry", "concerns": ["sensitivity"] }
     }
     """
 
-    static let analysisPending = """
+    static let queued = """
     {
-      "analysisId": "01J9Z3K5V8Q2M4N6P8R0S2T4V6",
-      "status": "queued",
-      "createdAt": "2026-10-15T09:12:33Z",
-      "completedAt": null,
-      "deviceType": "smartphone",
-      "queuePosition": 2,
-      "estimatedWaitSec": 110,
-      "measurement": {
-        "isDemo": true, "confidence": 0.5, "calibrationApplied": false, "overallScore": 50,
-        "summary": [ { "metric": "moisture", "value": 50, "score": 50, "grade": "normal" } ],
-        "byRoi": [],
-        "modelVersion": "stub"
-      },
-      "recommendation": { "status": "pending" },
-      "survey": { "gender": "male", "ageBand": "30s" },
-      "error": null
+      "analysisId": "01J9Z3K5V8Q2M4N6P8R0S2T4V6", "status": "QUEUED", "disease": \(diseaseAtopic),
+      "recommendationStatus": null, "recommendation": null, "guidance": [], "error": null,
+      "queuePosition": 2, "estimatedWaitSec": 90, "createdAt": "2026-10-16T09:12:33Z", "completedAt": null,
+      "survey": { "gender": "male", "ageBand": "30s" }
+    }
+    """
+
+    static func withheld(recommendationStatus: String) -> String {
+        """
+        {
+          "analysisId": "01J9Z3K5V8Q2M4N6P8R0S2T4V6", "status": "WITHHELD",
+          "disease": \(recommendationStatus == "uncertain" ? diseaseUncertain : diseaseNormal),
+          "recommendationStatus": "\(recommendationStatus)", "recommendation": null,
+          "guidance": ["이미지 모델의 6종 분류 참고 결과이며 의학적 진단이 아닙니다."], "error": null,
+          "queuePosition": null, "estimatedWaitSec": null,
+          "createdAt": "2026-10-16T09:12:33Z", "completedAt": "2026-10-16T09:12:34Z", "survey": { "gender": "female", "ageBand": "20s" }
+        }
+        """
+    }
+
+    static let failed = """
+    {
+      "analysisId": "01J9Z3K5V8Q2M4N6P8R0S2T4V6", "status": "FAILED", "disease": \(diseaseAtopic),
+      "recommendationStatus": null, "recommendation": null, "guidance": [],
+      "error": { "code": "E3002", "message": "추천 생성 시간이 초과됐어요." },
+      "queuePosition": null, "estimatedWaitSec": null,
+      "createdAt": "2026-10-16T09:12:33Z", "completedAt": "2026-10-16T09:14:43Z", "survey": { "gender": "female", "ageBand": "20s" }
     }
     """
 }

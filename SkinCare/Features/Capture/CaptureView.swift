@@ -31,7 +31,7 @@ struct CaptureView: View {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 CaptureStepIndicator(current: 0)
                 ScreenHeader(title: "얼굴 사진을 준비해 주세요.",
-                             subtitle: model.image == nil ? "정면 얼굴이 잘 보이는 사진 한 장이면 돼요." : "이 사진으로 측정할게요.")
+                             subtitle: model.image == nil ? "정면 얼굴이 잘 보이는 사진 한 장이면 돼요." : "이 사진으로 분석할게요.")
 
                 if let reason = model.retakeReason {
                     NoticeBanner(message: reason, systemImage: "arrow.counterclockwise")
@@ -45,7 +45,7 @@ struct CaptureView: View {
                 if let error = model.imageError {
                     Label(error, systemImage: "exclamationmark.circle")
                         .appText(.bodySmall)
-                        .foregroundStyle(.gradeCare)
+                        .foregroundStyle(.negative)
                 }
 
                 sourceButtons

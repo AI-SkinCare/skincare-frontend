@@ -26,7 +26,7 @@ struct HomeView: View {
 
                 startCard
                 recentSection
-                metricsGuide
+                flowGuide
             }
             .padding(.horizontal, Spacing.screen)
             .padding(.bottom, Spacing.xl)
@@ -38,15 +38,15 @@ struct HomeView: View {
         .toolbar(.hidden, for: .navigationBar)
     }
 
-    /// 측정 시작 카드 — 홈의 핵심 행동이라 canvas-soft로 강조 (design.md featured surface)
+    /// 분석 시작 카드 — 홈의 핵심 행동이라 canvas-soft로 강조 (design.md featured surface)
     private var startCard: some View {
         VStack(alignment: .leading, spacing: Spacing.lg) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("1분이면 측정이 끝나요.")
+                    Text("사진 한 장이면 충분해요.")
                         .appText(.title)
                         .foregroundStyle(.ink)
-                    Text("정면 사진 한 장과 간단한 설문으로\n피부 상태 4가지를 확인해요.")
+                    Text("정면 사진과 간단한 설문으로 피부 이미지를\n분류하고 맞는 성분을 추천해요.")
                         .appText(.bodySmall)
                         .foregroundStyle(.textMuted)
                 }
@@ -58,7 +58,7 @@ struct HomeView: View {
                     .background(Color.canvas, in: Circle())
                     .accessibilityHidden(true)
             }
-            Button("피부 측정 시작") { router.isCaptureFlowPresented = true }
+            Button("피부 분석 시작") { router.isCaptureFlowPresented = true }
                 .buttonStyle(.primary)
                 .disabled(!model.aiAvailable)
         }
@@ -89,8 +89,8 @@ struct HomeView: View {
                 }
                 .buttonStyle(PressableStyle())
             } else if model.hasLoaded {
-                EmptyStateView(systemImage: "sparkles", title: "아직 측정 기록이 없어요.",
-                               message: "첫 측정을 시작해 보세요.")
+                EmptyStateView(systemImage: "sparkles", title: "아직 분석 기록이 없어요.",
+                               message: "첫 분석을 시작해 보세요.")
                     .card(.outlined)
             } else if let errorMessage = model.errorMessage {
                 ErrorStateView(message: errorMessage) { Task { await model.load(api: api) } }
@@ -104,41 +104,47 @@ struct HomeView: View {
         }
     }
 
-    private var metricsGuide: some View {
+    /// 분석 흐름 안내: 촬영 → 6종 분류 → 성분 추천 (개정 수행계획서 1.1)
+    private var flowGuide: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            SectionTitle(title: "이렇게 측정해요")
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: Spacing.sm), GridItem(.flexible(), spacing: Spacing.sm)],
-                      spacing: Spacing.sm) {
-                ForEach(MetricGuide.all, id: \.metric) { guide in
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Image(systemName: guide.icon)
-                            .font(.system(size: 18, weight: .regular))
+            SectionTitle(title: "이렇게 분석해요")
+            VStack(spacing: 0) {
+                ForEach(Array(FlowStep.all.enumerated()), id: \.offset) { index, step in
+                    HStack(alignment: .top, spacing: Spacing.md) {
+                        Image(systemName: step.icon)
+                            .font(.system(size: 17, weight: .regular))
                             .foregroundStyle(.ink)
+                            .frame(width: 40, height: 40)
+                            .background(Color.canvasSoft, in: Circle())
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(guide.metric.displayName).appText(.link).foregroundStyle(.ink)
-                            Text(guide.detail).appText(.caption).foregroundStyle(.textMuted)
+                            Text(step.title).appText(.link).foregroundStyle(.ink)
+                            Text(step.detail).appText(.caption).foregroundStyle(.textMuted)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
+                        .padding(.top, 2)
+                        Spacer(minLength: 0)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .card(.outlined, padding: Spacing.md, radius: Radius.sm)
+                    .padding(.vertical, Spacing.sm)
                     .accessibilityElement(children: .combine)
+                    if index < FlowStep.all.count - 1 { Hairline().padding(.leading, 56) }
                 }
             }
+            .padding(.horizontal, Spacing.md)
+            .card(.outlined, padding: 0, radius: Radius.sm)
         }
     }
 }
 
-private struct MetricGuide {
-    let metric: Metric
+private struct FlowStep {
     let icon: String
+    let title: String
     let detail: String
 
     static let all = [
-        MetricGuide(metric: .moisture, icon: "drop", detail: "피부 속 촉촉함"),
-        MetricGuide(metric: .elasticity, icon: "circle.dotted.and.circle", detail: "탄탄하게 받쳐 주는 힘"),
-        MetricGuide(metric: .pigmentation, icon: "circle.lefthalf.filled", detail: "톤·잡티 · 낮을수록 좋아요"),
-        MetricGuide(metric: .pore, icon: "circle.grid.3x3", detail: "모공 크기 · 낮을수록 좋아요"),
+        FlowStep(icon: "camera.viewfinder", title: "정면 사진 촬영", detail: "얼굴을 원 안에 맞춰 찍고 간단한 설문에 답해요."),
+        FlowStep(icon: "square.grid.3x2", title: "6종 이미지 분류",
+                 detail: "건선 · 아토피 · 여드름 · 정상 · 주사 · 지루 중 가장 가까운 결과를 보여줘요."),
+        FlowStep(icon: "drop", title: "성분 · 관리법 추천", detail: "분류 결과와 설문을 바탕으로 맞는 성분과 루틴을 추천해요."),
     ]
 }
 
@@ -147,28 +153,16 @@ private struct RecentResultCard: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            ScoreRing(score: item.overallScore, size: 64, lineWidth: 6, showsLabel: false)
-            VStack(alignment: .leading, spacing: Spacing.xs) {
+            DiseaseTile(disease: item.disease, size: 60)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(Formatting.dateTime(item.createdAt))
+                    .appText(.caption)
+                    .foregroundStyle(.textMuted)
                 HStack(spacing: Spacing.xs) {
-                    Text(Formatting.dateTime(item.createdAt))
-                        .appText(.caption)
-                        .foregroundStyle(.textMuted)
-                    if item.isDemo { DemoBadge() }
+                    Text(item.disease.label).appText(.link).foregroundStyle(.ink)
+                    Text("모델 분류 점수 \(item.disease.confidencePercent)").appText(.caption).foregroundStyle(.textMuted)
                 }
-                HStack(spacing: Spacing.xs) {
-                    Text("종합 \(item.overallScore)점").appText(.link).foregroundStyle(.ink)
-                    GradeTag(grade: Grade(score: item.overallScore))
-                }
-                if item.status.isInProgress {
-                    HStack(spacing: 6) {
-                        ProgressView().controlSize(.mini).tint(.ink)
-                        Text("맞춤 추천 작성 중").appText(.caption).foregroundStyle(.ink)
-                    }
-                } else if !item.concerns.isEmpty {
-                    FlowLayout(spacing: 6) {
-                        ForEach(item.concerns.filter { $0 != .unknown }, id: \.self) { Chip(title: $0.displayLabel) }
-                    }
-                }
+                AnalysisStatusLine(status: item.status, recommendationStatus: item.recommendationStatus, concerns: item.concerns)
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.right")

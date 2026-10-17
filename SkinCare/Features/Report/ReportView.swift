@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// SCR-08 결과 리포트 (FR-REP-01). 측정 결과는 바로 보여주고, 추천은 진행 상태에 따라 바뀐다.
+/// SCR-08 결과 리포트. 이미지 분류 참고 결과를 바로 보여주고, 추천은 진행 상태에 따라 바뀐다.
 struct ReportView: View {
     @Environment(\.api) private var api
     @Environment(\.scenePhase) private var scenePhase
@@ -17,8 +17,8 @@ struct ReportView: View {
 
     var body: some View {
         Group {
-            if let detail = model.detail {
-                content(detail)
+            if let analysis = model.analysis {
+                content(analysis)
             } else if let errorMessage = model.errorMessage {
                 ErrorStateView(message: errorMessage) { Task { await model.poll(api: api) } }
             } else {
@@ -26,7 +26,7 @@ struct ReportView: View {
             }
         }
         .background(Color.canvas)
-        .navigationTitle("측정 결과")
+        .navigationTitle("분석 결과")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .task(id: PollKey(isActive: scenePhase == .active, generation: model.pollGeneration)) {
@@ -36,203 +36,130 @@ struct ReportView: View {
         .alert($model.alert)
     }
 
-    private func content(_ detail: AnalysisDetail) -> some View {
+    private func content(_ analysis: AnalysisView) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xl) {
-                ScoreHero(detail: detail)
-                MetricGridSection(summary: detail.measurement.summary)
-                if !detail.measurement.byRoi.isEmpty {
-                    RoiSection(regions: detail.measurement.byRoi)
-                }
-                RecommendationSummarySection(model: model, detail: detail)
-                footer
+                ClassificationHero(analysis: analysis)
+                GuidanceBox(lines: analysis.guidance)
+                ScoreBreakdown(disease: analysis.disease)
+                RecommendationSection(model: model, analysis: analysis)
             }
             .padding(.horizontal, Spacing.screen)
             .padding(.top, Spacing.xs)
             .padding(.bottom, Spacing.xl)
         }
     }
-
-    private var footer: some View {
-        VStack(alignment: .leading, spacing: Spacing.lg) {
-            if model.hasPrevious {
-                NavigationLink(value: AppRoute.trend(analysisID: model.analysisID)) {
-                    Label("이전 측정과 비교", systemImage: "chart.line.uptrend.xyaxis")
-                }
-                .buttonStyle(.outline)
-            }
-            DisclaimerText(text: model.detail?.recommendation.disclaimer)
-        }
-    }
 }
 
-// MARK: - 종합 점수
+// MARK: - 분류 참고 결과
 
-private struct ScoreHero: View {
-    let detail: AnalysisDetail
-
-    private var grade: Grade { Grade(score: detail.measurement.overallScore) }
-
-    /// 등급별 한 줄 요약. 문구 규칙상 상태를 단정하지 않는다.
-    private var summary: String {
-        switch grade {
-        case .good: "전반적으로 좋은 상태예요."
-        case .normal: "조금만 관리하면 더 좋아질 수 있어요."
-        case .care, .unknown: "꾸준한 관리가 도움이 될 수 있어요."
-        }
-    }
+/// 분류 라벨(질환명)을 그대로 크게 보여준다. 점수는 "모델 분류 점수"로만 표기 (질환 확률 아님).
+private struct ClassificationHero: View {
+    let analysis: AnalysisView
 
     var body: some View {
-        VStack(spacing: Spacing.lg) {
+        let disease = analysis.disease
+        VStack(alignment: .leading, spacing: Spacing.md) {
             HStack(spacing: Spacing.xs) {
-                Text(Formatting.dateTime(detail.createdAt))
+                Text("이미지 분류 참고 결과").appText(.bodySmall).foregroundStyle(.textMuted)
+                Spacer()
+                Text(Formatting.dateTime(analysis.createdAt)).appText(.caption).foregroundStyle(.textFaint)
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                Text(disease.label)
+                    .font(Font.custom("Pretendard-Bold", size: 44, relativeTo: .largeTitle))
+                    .foregroundStyle(disease.uncertain ? .textMuted : .ink)
+                if disease.uncertain {
+                    Chip(title: "판단 보류")
+                }
+            }
+
+            HStack(spacing: Spacing.sm) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("모델 분류 점수").appText(.caption).foregroundStyle(.textMuted)
+                    Text(disease.confidencePercent).appText(.title).foregroundStyle(.ink)
+                }
+                Spacer()
+            }
+
+            if disease.uncertain {
+                Text("모델이 확신하지 못한 결과예요. 밝은 곳에서 정면으로 다시 찍으면 더 정확해질 수 있어요.")
                     .appText(.bodySmall)
                     .foregroundStyle(.textMuted)
-                if detail.measurement.isDemo { DemoBadge() }
-            }
-
-            ScoreRing(score: detail.measurement.overallScore, size: 188)
-
-            VStack(spacing: Spacing.xs) {
-                GradeTag(grade: grade, isFilled: true)
-                Text(summary)
-                    .appText(.title)
-                    .foregroundStyle(.ink)
-                    .multilineTextAlignment(.center)
-            }
-
-            if detail.measurement.isDemo {
-                NoticeBanner(message: AppCopy.demoReportNotice, systemImage: "info.circle")
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, Spacing.sm)
+        .card(.soft)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("이미지 분류 참고 결과 \(disease.label), 모델 분류 점수 \(disease.confidencePercent)\(disease.uncertain ? ", 판단 보류" : "")")
     }
 }
 
-// MARK: - 지표 4종
-
-private struct MetricGridSection: View {
-    let summary: [MetricSummary]
-    private let columns = [GridItem(.flexible(), spacing: Spacing.sm), GridItem(.flexible(), spacing: Spacing.sm)]
+/// 상시 안내문. 서버 `guidance`가 없을 때(진행 중)는 기본 문구를 쓴다.
+private struct GuidanceBox: View {
+    let lines: [String]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            SectionTitle(title: "지표별 상태", caption: "100점에 가까울수록 좋아요")
-            LazyVGrid(columns: columns, spacing: Spacing.sm) {
-                ForEach(summary.filter { $0.metric != .unknown }) { item in
-                    MetricTile(item: item)
+        let items = lines.isEmpty ? [AppCopy.classificationNotice] : lines
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            ForEach(items, id: \.self) { line in
+                HStack(alignment: .top, spacing: Spacing.xs) {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 12, weight: .medium))
+                        .padding(.top, 2)
+                    Text(line)
+                        .appText(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
+        .foregroundStyle(.textMuted)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 }
 
-private struct MetricTile: View {
-    let item: MetricSummary
+/// 6종 모델 분류 점수. 표시 순서는 서버 순서(건선·아토피·여드름·정상·주사·지루), 최고 점수만 ink.
+private struct ScoreBreakdown: View {
+    let disease: Disease
 
     var body: some View {
+        let rows = disease.orderedProbabilities
+        let top = rows.max { $0.score < $1.score }?.label
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack {
-                Text(item.metric.displayName).appText(.bodySmall).foregroundStyle(.textMuted)
-                Spacer()
-                GradeTag(grade: item.grade)
-            }
-            Text("\(item.score)")
-                .appText(.heading4)
-                .foregroundStyle(.ink)
-            // 막대 길이는 score(좋은 방향 통일)
-            ProgressBar(value: item.score)
-            Text(item.metric.lowerIsBetter ? "측정값 \(item.value) · 낮을수록 좋아요" : "측정값 \(item.value)")
-                .appText(.caption)
-                .foregroundStyle(.textFaint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-        }
-        .card(.outlined, padding: Spacing.md, radius: Radius.sm)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(item.metric.displayName)
-        .accessibilityValue(
-            "점수 \(item.score)점, \(item.grade.label), 측정값 \(item.value)\(item.metric.lowerIsBetter ? ", 낮을수록 좋음" : "")"
-        )
-    }
-}
-
-// MARK: - 부위별
-
-/// TODO: 얼굴 도식 위 ROI 점 표시 (SCR-08). 1차는 목록으로 보여준다.
-private struct RoiSection: View {
-    let regions: [RoiMetrics]
-    @State private var expanded: Set<String> = []
-
-    private let metrics: [Metric] = [.moisture, .elasticity, .pigmentation, .pore]
-
-    var body: some View {
-        let visible = regions.filter { $0.roi != .unknown }
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            SectionTitle(title: "부위별 상태")
-            VStack(spacing: 0) {
-                ForEach(Array(visible.enumerated()), id: \.element.id) { index, region in
-                    VStack(alignment: .leading, spacing: 0) {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) { toggle(region.id) }
-                        } label: {
-                            HStack(spacing: Spacing.sm) {
-                                Text(region.roi.displayName).appText(.body).foregroundStyle(.ink)
-                                Spacer()
-                                Text("\(region.overallScore)").appText(.link).foregroundStyle(.ink)
-                                GradeTag(grade: region.grade)
-                                    .frame(width: 72, alignment: .leading)
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(.textFaint)
-                                    .rotationEffect(.degrees(expanded.contains(region.id) ? 180 : 0))
-                            }
-                            .frame(minHeight: 52)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityHint(expanded.contains(region.id) ? "접기" : "지표 펼치기")
-
-                        if expanded.contains(region.id) {
-                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: Spacing.xs) {
-                                ForEach(metrics, id: \.self) { metric in
-                                    if let value = region.value(of: metric) {
-                                        HStack {
-                                            Text(metric.displayName).foregroundStyle(.textMuted)
-                                            Spacer()
-                                            Text("\(value)").foregroundStyle(.ink)
-                                        }
-                                        .appText(.bodySmall)
-                                        .padding(.horizontal, Spacing.sm)
-                                        .padding(.vertical, Spacing.xs)
-                                        .background(Color.canvasSoft, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                    }
-                                }
-                            }
-                            .padding(.bottom, Spacing.md)
-                            .transition(.opacity)
-                        }
+            SectionTitle(title: "6종 모델 분류 점수", caption: "질환 확률이 아니에요")
+            VStack(spacing: Spacing.sm) {
+                ForEach(rows, id: \.label) { row in
+                    let isTop = row.label == top
+                    HStack(spacing: Spacing.sm) {
+                        Text(row.label)
+                            .appText(isTop ? .link : .body)
+                            .foregroundStyle(isTop ? .ink : .textMuted)
+                            .frame(width: 52, alignment: .leading)
+                        ProgressBar(value: Int((row.score * 100).rounded()), color: isTop ? .ink : .hairline, height: 8)
+                        Text(Disease.percent(row.score))
+                            .appText(.caption)
+                            .foregroundStyle(isTop ? .ink : .textMuted)
+                            .frame(width: 40, alignment: .trailing)
                     }
-                    if index < visible.count - 1 { Hairline() }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(row.label)
+                    .accessibilityValue("모델 분류 점수 \(Disease.percent(row.score))")
                 }
             }
-            .padding(.horizontal, Spacing.md)
-            .card(.outlined, padding: 0, radius: Radius.sm)
+            .card(.outlined, padding: Spacing.md, radius: Radius.sm)
         }
-    }
-
-    private func toggle(_ id: String) {
-        if expanded.contains(id) { expanded.remove(id) } else { expanded.insert(id) }
     }
 }
 
-// MARK: - 추천 요약
+// MARK: - 맞춤 추천 (상태별)
 
-private struct RecommendationSummarySection: View {
+private struct RecommendationSection: View {
     let model: ReportModel
-    let detail: AnalysisDetail
+    let analysis: AnalysisView
     @Environment(\.api) private var api
+    @Environment(AppRouter.self) private var router
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -243,62 +170,53 @@ private struct RecommendationSummarySection: View {
 
     @ViewBuilder
     private var content: some View {
-        let recommendation = detail.recommendation
-        if detail.status == .failed || recommendation.status == .failed {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                HStack(spacing: Spacing.sm) {
-                    Image(systemName: "exclamationmark.circle").font(.system(size: 18)).foregroundStyle(.ink)
-                    Text("추천을 만들지 못했어요.").appText(.link).foregroundStyle(.ink)
-                }
-                Text("측정 결과는 그대로 있어요. 다시 시도하면 추천을 새로 작성해요.")
-                    .appText(.bodySmall)
-                    .foregroundStyle(.textMuted)
-                Button {
-                    Task { await model.retryRecommendation(api: api) }
-                } label: {
-                    HStack(spacing: Spacing.xs) {
-                        if model.isRetrying { ProgressView().tint(.onPrimary) }
-                        Text("다시 시도")
-                    }
-                }
-                .buttonStyle(.primary)
-                .disabled(model.isRetrying)
-            }
-            .card(.soft)
-        } else if detail.status.isInProgress {
+        switch analysis.status {
+        case .queued, .generating:
             pendingCard
-        } else if recommendation.status == .done {
-            doneCard(recommendation)
+        case .completed:
+            if let recommendation = analysis.recommendation {
+                doneCard(recommendation)
+            }
+        case .withheld:
+            withheldCard
+        case .failed:
+            failedCard
+        case .unknown:
+            EmptyView()
         }
     }
+
+    // 진행 중
 
     private var pendingCard: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             if model.pollingTimedOut {
-                Text("시간이 오래 걸리고 있어요.")
-                    .appText(.link)
-                    .foregroundStyle(.ink)
-                Text("이력에서 나중에 확인할 수 있어요.")
-                    .appText(.bodySmall)
-                    .foregroundStyle(.textMuted)
+                Text("시간이 오래 걸리고 있어요.").appText(.link).foregroundStyle(.ink)
+                Text("이력에서 나중에 확인할 수 있어요.").appText(.bodySmall).foregroundStyle(.textMuted)
             } else {
                 HStack(spacing: Spacing.sm) {
                     ProgressView().tint(.ink)
-                    Text(detail.status == .recommending ? "추천 이유를 정리하고 있어요." : "맞춤 추천을 작성하고 있어요.")
+                    Text(analysis.status == .generating ? "성분과 관리법을 정리하고 있어요." : "맞춤 추천을 기다리고 있어요.")
                         .appText(.link)
                         .foregroundStyle(.ink)
                 }
-                HStack(spacing: Spacing.xs) {
-                    ForEach(pendingDetails, id: \.self) { Chip(title: $0) }
-                }
-                if !model.aiAvailable {
-                    Text("서버가 돌아오면 이어서 작성돼요.")
+                let details = pendingDetails
+                if !details.isEmpty {
+                    Text(details.joined(separator: " · "))
                         .appText(.bodySmall)
                         .foregroundStyle(.textMuted)
                 }
+                if model.showsDelayNotice {
+                    Text("평소보다 오래 걸리고 있어요. 조금만 더 기다려 주세요.")
+                        .appText(.bodySmall)
+                        .foregroundStyle(.textMuted)
+                }
+                if !model.aiAvailable {
+                    Text("서버가 돌아오면 이어서 작성돼요.").appText(.bodySmall).foregroundStyle(.textMuted)
+                }
             }
             Hairline()
-            Text("기다리는 동안 위에서 측정 결과를 볼 수 있어요.")
+            Text("화면을 나가도 추천은 계속 만들어져요. 이력에서 다시 볼 수 있어요.")
                 .appText(.caption)
                 .foregroundStyle(.textMuted)
         }
@@ -306,12 +224,72 @@ private struct RecommendationSummarySection: View {
     }
 
     private var pendingDetails: [String] {
-        if detail.status == .recommending { return ["보통 1분 이내"] }
+        if analysis.status == .generating { return ["보통 1분 이내"] }
         var details: [String] = []
-        if let position = detail.queuePosition { details.append("대기 \(position)번째") }
-        if let wait = detail.estimatedWaitSec { details.append(Formatting.waitTime(seconds: wait)) }
+        if let position = analysis.queuePosition { details.append("대기 \(position)번째") }
+        if let wait = analysis.estimatedWaitSec { details.append(Formatting.waitTime(seconds: wait)) }
         return details
     }
+
+    // 보류 — 오류가 아니다
+
+    @ViewBuilder
+    private var withheldCard: some View {
+        if analysis.recommendationStatus == .noConcern {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                Label("추천할 고민을 찾지 못했어요", systemImage: "checkmark.circle")
+                    .appText(.link)
+                    .foregroundStyle(.ink)
+                Text("정상으로 분류됐고 설문에서 고른 피부 고민이 없어서 자동 추천을 만들지 않았어요. 관리하고 싶은 고민을 골라 다시 분석해 보세요.")
+                    .appText(.bodySmall)
+                    .foregroundStyle(.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("고민 골라서 다시 분석") { router.isCaptureFlowPresented = true }
+                    .buttonStyle(.primary)
+            }
+            .card(.soft)
+        } else {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                Label("분류가 불확실해 추천을 보류했어요", systemImage: "questionmark.circle")
+                    .appText(.link)
+                    .foregroundStyle(.ink)
+                Text("밝은 곳에서 정면으로 다시 찍어 보세요. 피부 상태가 걱정된다면 피부과 전문의와 상담하는 것이 좋아요.")
+                    .appText(.bodySmall)
+                    .foregroundStyle(.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("다시 촬영하기") { router.isCaptureFlowPresented = true }
+                    .buttonStyle(.primary)
+            }
+            .card(.soft)
+        }
+    }
+
+    // 실패
+
+    private var failedCard: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            Label("추천을 만들지 못했어요", systemImage: "exclamationmark.circle")
+                .appText(.link)
+                .foregroundStyle(.ink)
+            Text(analysis.error?.message ?? "분류 결과는 그대로 있어요. 다시 시도하면 추천만 새로 만들어요.")
+                .appText(.bodySmall)
+                .foregroundStyle(.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                Task { await model.retryRecommendation(api: api) }
+            } label: {
+                HStack(spacing: Spacing.xs) {
+                    if model.isRetrying { ProgressView().tint(.onPrimary) }
+                    Text("추천 다시 요청")
+                }
+            }
+            .buttonStyle(.primary)
+            .disabled(model.isRetrying)
+        }
+        .card(.soft)
+    }
+
+    // 완료
 
     private func doneCard(_ recommendation: Recommendation) -> some View {
         VStack(alignment: .leading, spacing: Spacing.lg) {
@@ -345,7 +323,7 @@ private struct RecommendationSummarySection: View {
                 }
             }
 
-            NavigationLink(value: AppRoute.recommendation(analysisID: detail.analysisId)) {
+            NavigationLink(value: AppRoute.recommendation(analysisID: analysis.analysisId)) {
                 Text("추천 자세히 보기")
             }
             .buttonStyle(.primary)
@@ -354,8 +332,7 @@ private struct RecommendationSummarySection: View {
     }
 }
 
-/// 피부 타입·고민 칩 (화면 표기는 API §6.4 "화면 표기" 열).
-/// 서버 label(AI 라벨)은 "여드름" 같은 질환명이 있어 쓰지 않고, 모르는 코드는 표시하지 않는다.
+/// 피부 타입·고민 칩. 고민은 `Concern.displayLabel`로 표시하고 모르는 코드는 숨긴다.
 struct ProfileChips: View {
     let recommendation: Recommendation
 

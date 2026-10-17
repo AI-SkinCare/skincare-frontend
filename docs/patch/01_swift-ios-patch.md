@@ -7,6 +7,10 @@
 | 작성일 | 2026-10-10 |
 | 상태 | 초안 — 팀 공유·합의 필요 항목은 §0에 별도 표시 |
 
+> **2026-10-17 개정 반영**: 기획이 "피부 이미지 6종 분류 + 성분 추천"으로 바뀌었다 (`docs/new_common/`).
+> 백엔드 계약은 `docs/new_common/api변경사항.md`가 기준이고, 변경점·체크리스트는 `02_pipeline-revision-checklist.md`에 있다.
+> 이 문서의 4개 지표·종합 점수·부위별·추이·데모 값 관련 내용은 **폐기**됐다. iOS 적용 규칙(Keychain, HEIC, 카메라, 폴링 생명주기, 디자인, 배포)은 그대로 유효하다.
+
 ## 읽는 법
 
 - 공통 문서는 프론트엔드를 **React 웹 SPA** 기준으로 작성했다. 프론트엔드는 **Swift(SwiftUI) iOS 네이티브 앱**으로 만든다.
@@ -24,7 +28,7 @@
 | # | 항목 | 관련 | 상대 | 합의 전 임시 방식 |
 |---|------|------|------|-------------------|
 | A1 | ~~범위에서 "네이티브 앱 제외" 삭제, Android 미지원~~ **결정됨 (2026-10-10): iOS(Swift)로 개발. Android(Kotlin)는 iOS 완성 후 여유 있으면 검토** | 01 §1.3, NFR-CMP-01 | 전원 공유 | — |
-| A2 | 모바일용 리프레시 토큰 전달 방식 (§3.1) | API §3.2·3.3, 설계 §8 | 백엔드 이현승 — **2026-10-10 제안 전달, 회신 대기** | 쿠키 방식으로 먼저 구현, 로컬은 HTTPS 터널 사용 |
+| A2 | ~~모바일용 리프레시 토큰 전달 방식 (§3.1)~~ **반영됨 (2026-10-16): 백엔드가 `X-Client: ios`일 때 `refreshToken`을 본문으로 주고, refresh·logout 본문도 받음** | API §3.2·3.3, 설계 §8 | 백엔드 이현승 | — |
 | A3 | design.md를 화면 디자인 기준으로 채택 (화면설계서 §5 대체) | 03 §5 | 김우주, 손승우 | design.md 기준 |
 | A4 | (선택) 추천 완료 푸시 알림 | 신규 | 이현승 | 하지 않음 — 폴링만 |
 
@@ -108,10 +112,10 @@
 | SCR-05 | /capture | `CaptureView` | 측정 흐름 push |
 | SCR-06 | /capture/survey | `SurveyView` | 측정 흐름 push |
 | SCR-07 | (오버레이) | `MeasuringOverlay` | SurveyView 위 전체 화면 오버레이 |
-| SCR-08 | /analyses/:id | `ReportView` | cover 닫고 홈 탭에서 push |
+| SCR-08 | /analyses/:id | `ReportView` — 분류 참고 결과 + 6종 점수 + 추천(상태별) | cover 닫고 홈 탭에서 push |
 | SCR-09 | /analyses/:id/recommendation | `RecommendationView` | ReportView에서 push |
 | SCR-10 | /history | `HistoryView` | 탭 2 |
-| SCR-11 | /analyses/:id/trend | `TrendView` | ReportView에서 push |
+| ~~SCR-11~~ | ~~/analyses/:id/trend~~ | **삭제** (개정 기획: 지표 없음, 추이 API 삭제) | — |
 | SCR-12 | /me | `MyPageView` | 탭 3 |
 
 ### SCR-04 촬영 가이드
@@ -138,11 +142,11 @@
 
 ### SCR-08 결과 리포트 · 폴링
 
-- `폴링: status가 queued·recommending일 때 처음 3분은 3초, 이후 10초 간격. 15분이 지나면 폴링을 멈추고…`
+- `폴링: status가 queued·recommending일 때 처음 3분은 3초, 이후 10초 간격. 15분이 지나면 폴링을 멈추고…` → **개정: QUEUED·GENERATING일 때 3분까지 3초, 이후 10초, 150초 후 지연 안내, 최대 30분** (API 변경사항 §1.4)
 - → 간격·타임아웃 규칙은 그대로. 앱 규칙 추가:
   - 화면이 사라지면(`.task` 취소) 폴링 중단, 다시 나타나면 즉시 1회 조회 후 재개.
   - 앱이 백그라운드로 가면 폴링 중단, 포그라운드로 돌아오면 즉시 1회 조회 후 재개 (`scenePhase`).
-  - 15분 타이머는 **분석 제출 시각(createdAt) 기준**으로 계산한다 (화면 재진입마다 리셋되지 않게).
+  - 30분 타이머·150초 지연 안내는 **분석 제출 시각(createdAt) 기준**으로 계산한다 (화면 재진입마다 리셋되지 않게).
 - 폴링 중 추천 완료 알림은 하지 않는다 (푸시는 **[A4]**).
 
 ### SCR-09 추천 상세
@@ -238,7 +242,7 @@
 |------|------|
 | Base URL | 빌드 설정(xcconfig)의 `API_BASE_URL` |
 | X-Request-Id | 앱이 요청마다 UUID를 생성해 헤더로 보낸다. 공통 오류 문구의 "요청 ID 앞 8자리"는 응답 헤더 값을 쓴다 |
-| deviceType | iPhone은 항상 `smartphone` |
+| ~~deviceType~~ | 개정으로 **삭제** — 보내지 않는다 |
 | survey | multipart의 `survey` 필드는 JSON 문자열 (`JSONEncoder` → String) |
 | Retry-After | 429(E4004) 응답의 `Retry-After`는 다이얼로그 문구에만 반영, 자동 재시도 안 함 |
 | 빈 목록 | ingredients 0개, routine 0개, byRoi 빈 배열을 모두 처리 (원문 규칙 그대로) |
@@ -269,7 +273,7 @@
 | 원문 변수 | 수정 |
 |-----------|------|
 | `VITE_API_BASE_URL=/api/v1` | `API_BASE_URL` — `Debug.xcconfig`: `http://localhost:3000/api/v1`, `Release.xcconfig`: `https://app.<도메인>/api/v1` |
-| `VITE_POLL_INTERVAL_MS` 등 폴링 값 | 환경변수 아님 — 코드 상수 (`PollingPolicy`: 3초 / 3분 후 10초 / 15분 중단) |
+| `VITE_POLL_INTERVAL_MS` 등 폴링 값 | 환경변수 아님 — 코드 상수 (`PollingPolicy`: 3초 / 3분 후 10초 / 150초 지연 안내 / 30분 중단) |
 
 - 실기기 테스트용 개인 값(맥 LAN IP 등)은 `Local.xcconfig`에 두고 `.gitignore` 처리 (`*.local.xcconfig`).
 - 비밀값은 앱에 넣지 않는다 (앱 바이너리는 누구나 열어볼 수 있음). AI 서버 토큰 등은 원래대로 백엔드에만.

@@ -1,6 +1,6 @@
 import Foundation
 
-// API 명세 §2 클라이언트 ↔ 백엔드 엔드포인트
+// 백엔드 API (docs/new_common/api변경사항.md §1)
 
 enum AuthAPI {
     private struct Credentials: Encodable { let email: String; let password: String }
@@ -39,30 +39,27 @@ enum UsersAPI {
 }
 
 enum AnalysisAPI {
-    static func submit(imageJPEG: Data, survey: Survey) -> APIRequest<AnalysisSubmission> {
+    /// 사진 + 설문 제출 → 이미지 분류 → 추천 대기열 등록. 202 + AnalysisView
+    static func submit(imageJPEG: Data, survey: Survey) -> APIRequest<AnalysisView> {
         var form = MultipartFormData()
         form.addFile(name: "image", filename: "face.jpg", mimeType: "image/jpeg", data: imageJPEG)
         let surveyJSON = (try? JSONEncoder().encode(survey.sanitized())).flatMap { String(data: $0, encoding: .utf8) }
         form.addField(name: "survey", value: surveyJSON ?? "{}")
-        form.addField(name: "deviceType", value: "smartphone")
         return APIRequest(method: .post, path: "/analyses", body: .multipart(form))
     }
 
-    static func detail(id: String) -> APIRequest<AnalysisDetail> {
+    static func detail(id: String) -> APIRequest<AnalysisView> {
         APIRequest(method: .get, path: "/analyses/\(id)")
     }
 
-    static func retryRecommendation(id: String) -> APIRequest<AnalysisSubmission> {
+    /// FAILED 분석만 가능. 저장된 분류로 추천만 다시 만든다.
+    static func retryRecommendation(id: String) -> APIRequest<AnalysisView> {
         APIRequest(method: .post, path: "/analyses/\(id)/recommendation/retry")
     }
 
     static func list(page: Int, size: Int = 20) -> APIRequest<AnalysisPage> {
         APIRequest(method: .get, path: "/analyses",
                    queryItems: [URLQueryItem(name: "page", value: "\(page)"), URLQueryItem(name: "size", value: "\(size)")])
-    }
-
-    static func trend(id: String) -> APIRequest<Trend> {
-        APIRequest(method: .get, path: "/analyses/\(id)/trend")
     }
 
     static func delete(id: String) -> APIRequest<EmptyResponse> {

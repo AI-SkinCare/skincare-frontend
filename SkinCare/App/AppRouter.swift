@@ -9,7 +9,6 @@ enum AppTab: Hashable {
 enum AppRoute: Hashable {
     case report(analysisID: String)
     case recommendation(analysisID: String)
-    case trend(analysisID: String)
 }
 
 @MainActor
@@ -21,7 +20,7 @@ final class AppRouter {
     /// 측정 흐름(SCR-04~07)은 탭을 가리는 전체 화면으로 띄운다.
     var isCaptureFlowPresented = false
 
-    /// 분석 제출 직후: 측정 흐름을 닫고 홈 탭에서 결과 리포트를 연다.
+    /// 분석 제출 직후: 촬영 흐름을 닫고 홈 탭에서 결과 리포트를 연다.
     func showReport(analysisID: String) {
         isCaptureFlowPresented = false
         selectedTab = .home

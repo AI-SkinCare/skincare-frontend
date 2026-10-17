@@ -69,10 +69,10 @@ struct LoginView: View {
         VStack(spacing: Spacing.md) {
             BrandMark(size: 72)
             VStack(spacing: Spacing.xs) {
-                Text("피부를 숫자로 만나요.")
+                Text("피부 사진으로 시작해요.")
                     .appText(.heading3)
                     .foregroundStyle(.ink)
-                Text("사진 한 장으로 수분, 탄력,\n색소침착, 모공을 측정해요.")
+                Text("사진 한 장으로 피부 이미지를 분류하고\n맞는 성분과 관리법을 추천해요.")
                     .appText(.bodyLarge)
                     .foregroundStyle(.textMuted)
             }
@@ -88,7 +88,7 @@ struct LoginView: View {
             if let errorMessage {
                 Label(errorMessage, systemImage: "exclamationmark.circle")
                     .appText(.bodySmall)
-                    .foregroundStyle(.gradeCare)
+                    .foregroundStyle(.negative)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .transition(.opacity)
             }

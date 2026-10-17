@@ -329,27 +329,26 @@ The system is essentially shadow-free: no drop shadows appear on any card, butto
 - **Pretendard** (앱 번들, OFL). Saans는 상용·한글 미지원이고, Pretendard의 라틴 글리프는 위에서 권장한 대체 폰트 Inter 기반이다.
 - 굵기 매핑: 652 → Bold, 600 → SemiBold, 456 → Medium, 300 → Light. 크기는 pt, Dynamic Type을 따른다.
 - 웹 히어로용 `display`(80) · `heading-2`(44)는 쓰지 않는다. `heading-1`(56)은 종합 점수 숫자에만 쓴다.
-- `heading-3`은 모바일·한글 폭에 맞춰 28pt / 1.2로 줄여 화면 대표 제목에 쓴다. 탭 루트 제목(홈·이력·마이)은 30pt Bold.
+- `heading-3`은 모바일·한글 폭에 맞춰 28pt / 1.2로 줄여 화면 대표 제목에 쓴다. 탭 루트 제목(홈·이력·마이)은 30pt Bold. 결과 화면의 분류 라벨은 44pt Bold.
 
-### Semantic — Grade
-
-측정 등급(화면 설계서 §5)과 추이 화살표에만 쓰는 상태 색. 넓은 면적·배경에는 쓰지 않고, 항상 글자 라벨과 함께 쓴다.
+### Semantic
 
 | Token | Hex | Use |
 | --- | --- | --- |
-| `{colors.grade-good}` | #1E9E5A | 양호 · 추이 ▲ 좋아짐 |
-| `{colors.grade-normal}` | #E0A400 | 보통 |
-| `{colors.grade-care}` | #EE6A1F | 관리 필요 · 추이 ▼ 나빠짐 |
+| `{colors.negative}` | #EE6A1F | 오류 문구, 삭제·탈퇴 같은 파괴적 동작 라벨. 넓은 면적·배경에는 쓰지 않는다 |
+
+> 개정 기획(2026-10-15)으로 4개 지표 점수·등급이 없어져 등급 색(양호·보통·관리 필요)과 점수 링은 제거했다.
 
 ### Components
 
 - **Notice banner** — 화면 설계서의 "노란 배너"는 `{colors.canvas-soft}` 카드 + 아이콘으로 대체 (색 띠 금지 원칙).
-- **Demo badge** — "데모 값" 배지는 실측처럼 보이면 안 되므로 `{colors.ink}` 채움 pill + `{colors.on-primary}` 라벨.
-- **Grade tag** — 8pt 등급 색 점 + `{typography.label}` 글자 라벨.
 - **Screen gutter** — 화면 좌우 여백 20pt.
 - **Tab header** — 탭 루트 화면 상단 제목은 시스템 큰 제목 대신 직접 그린다 (Pretendard 통일).
 - **Segmented control** — `segmented-control` 그대로: canvas-soft 트랙 + 흰 pill 활성 옵션(유일한 그림자). 루틴 아침/저녁 등.
-- **Score ring** — 종합 점수는 ink 진행 + canvas-soft 트랙 링. 목록에는 작은 링(숫자만)으로 반복 사용.
+- **Classification hero** — 결과 화면 상단 canvas-soft 카드: "이미지 분류 참고 결과" 라벨, 분류 라벨(질환명) 44pt Bold, "모델 분류 점수 NN%". 불확실하면 라벨을 `{colors.text-muted}`로 흐리고 "판단 보류" 칩.
+- **Score bars** — 6종 모델 분류 점수 막대. 서버 순서 고정, 최고 점수만 ink 막대·굵은 라벨, 나머지는 hairline 막대·muted 라벨. 캡션 "질환 확률이 아니에요".
+- **Disease tile** — 이력·홈 카드 왼쪽의 canvas-soft 30% squircle 안에 분류 라벨 텍스트.
+- **Guidance** — 서버 안내 문장은 info 아이콘 + caption으로 항상 노출 (접기 없음).
 - **Disabled primary** — 비활성 CTA는 `{colors.hairline}` 채움 + `{colors.text-muted}` 라벨 (canvas-soft 카드 위에서도 구분되게).
 - **Bottom action bar** — 화면 하단 고정 CTA는 흰 바탕 + 위쪽 hairline.
 - **Icons** — SF Symbols, regular/light 굵기, ink 색. 원형 canvas-soft 배경 위에 올려 쓴다.

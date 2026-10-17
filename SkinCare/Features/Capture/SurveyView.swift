@@ -34,7 +34,7 @@ struct SurveyView: View {
                         .buttonStyle(.primary)
                         .disabled(!model.survey.hasRequiredFields)
                 } else {
-                    Button("측정 시작") { Task { await model.submit(api: api, router: router) } }
+                    Button("분석 시작") { Task { await model.submit(api: api, router: router) } }
                         .buttonStyle(.primary)
                         .disabled(!model.canSubmit)
                 }
@@ -141,6 +141,10 @@ private struct SurveyStepTwo: View {
             levelQuestion("스트레스", keyPath: \.stressLevel)
 
             SurveyQuestion(title: "피부 고민", caption: "\(survey.concerns?.count ?? 0) / \(Survey.maxConcerns)") {
+                // 정상으로 분류되면 고른 고민으로 추천한다 — 고르지 않으면 추천이 보류된다 (API 변경사항 §1.3)
+                Text("정상으로 분류되면 여기서 고른 고민을 바탕으로 추천해요.")
+                    .appText(.caption)
+                    .foregroundStyle(.textMuted)
                 FlowLayout {
                     ForEach(Concern.knownCases, id: \.self) { concern in
                         let selected = survey.concerns?.contains(concern) == true
