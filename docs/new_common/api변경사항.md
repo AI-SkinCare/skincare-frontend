@@ -2,7 +2,7 @@
 
 백엔드 API(`/api/v1`)를 한곳에서 확인하는 문서입니다. **1절은 현재 API 전체**, **2절은 이전과 달라진 점**, **3절은 앱에서 할 일**입니다.
 
-- 현재 기준: 2026-10-16, `develop` `bdce8da` (개정 수행계획서 2026-10-15 반영)
+- 현재 기준: 2026-11-12 추가 계약 ([추천 보류·생성 출처](../patch/20261112-ai-generation.md)), 기존 기준 `develop` `bdce8da`
 - 실제 동작 기준: Swagger `/api/docs` (JSON `/api/docs-json`)
 - 상세 규칙: [TRD](TRD.md) §7·§9–§14, 앱 연동 규칙: [ios-integration.md](ios-integration.md)
 - 팀 공식 명세 SC-03(`skincare-ai/docs/project/03-api-spec.md`)은 아직 이번 변경 전 내용입니다
@@ -163,6 +163,7 @@
 | `createdAt` | string | 항상 |
 | `completedAt` | string \| null | COMPLETED·WITHHELD·FAILED |
 | `survey` | object | 항상 (다음 분석의 기본값) |
+| `generation` | object \| null | COMPLETED·WITHHELD의 출처와 품질 정보: `origin`, `qualityStatus`, `evidenceStatus`, `qualityIssues` |
 
 **상태 (`status`)**
 
@@ -196,12 +197,16 @@
 | `generated` | COMPLETED | 추천 생성 | 성분·관리 단계·요약 |
 | `uncertain` | WITHHELD | 분류가 불확실해 보류 | 재촬영 또는 피부과 상담 |
 | `no_concern` | WITHHELD | 정상 분류이고 고른 고민 없음 | 설문에서 고민을 골라 다시 분석 |
+| `quality_rejected` | WITHHELD | 근거 조건 또는 추천 품질 기준 미충족 | `guidance`를 표시하고 종료. 분류 불확실·재시도 실패와 구별 |
 
 **추천 객체 (`recommendation`)**: `skinType`·`concerns`(code + label), `ingredients`, `routine`, `reasoning`, `answer`, `inputNotes`, `disclaimer`, `filtered`, `usedFallback`, `modelVersion`, `inferenceMs`
 
 - `ingredients`는 개수가 가변입니다. `purpose`가 `null`이면 성분명만 표시합니다.
 - `routine.time`은 `morning` · `evening` · `daily` · `weekly` · `anytime` 중 하나입니다.
-- `reasoning`은 생성된 설명이지 검증된 근거가 아닙니다. `filtered`·`usedFallback`은 화면에 표시하지 않습니다.
+- `reasoning`은 생성된 설명이지 임상 검증 결과가 아닙니다. `generation.origin=source_cards`는 근거 자료로 구성한 대체 안내, `rule_fallback`은 규칙 기반 대체 안내로 표시합니다.
+- `generation.origin=not_generated` 또는 품질/근거 상태가 `withheld`이면 추천 성공 카드를 표시하지 않습니다. 구버전 응답의 누락된 출처는 모델 생성으로 추정하지 않습니다.
+- `ingredients[].purposeSource`, `purposeStatus`는 선택 필드입니다. 모델 버전 문자열은 최대 160자입니다.
+- 설문에 선택 필드 `avoidIngredients`를 추가합니다. 최대 30개, 각 1–100자이며 피할 성분을 서버까지 그대로 전달합니다.
 
 ### 1.5 개발용 fixture (`X-Fixture-Scenario`, production에선 무시)
 
@@ -218,6 +223,10 @@
 ---
 
 ## 2. 이전과 달라진 점
+
+### 2026-11-12 — 품질 보류·미생성 및 출처 전달 (추가 변경)
+
+`quality_rejected`를 WITHHELD로 저장하고 `generation` 정보를 상세 응답에 추가했습니다. `not_generated`는 생성 출처이며 recommendationStatus가 아닙니다. 피할 성분 설문도 연결했습니다. 기존 데이터·필드는 유지하며 새 DB V3를 적용합니다.
 
 ### 2026-10-16 — 분석 API를 이미지 분류 + 추천으로 전환 (호환 깨짐)
 

@@ -14,11 +14,14 @@ struct Survey: Codable, Sendable, Equatable {
     var concerns: [Concern]?
     var currentProducts: [String]?
     var note: String?
+    var avoidIngredients: [String]?
 
     static let maxConcerns = 3
     static let maxProducts = 5
     static let maxProductLength = 30
     static let maxNoteLength = 300
+    static let maxAvoidIngredients = 30
+    static let maxIngredientLength = 100
     static let sleepHoursRange = 0...14
 
     var hasRequiredFields: Bool {
@@ -35,6 +38,9 @@ struct Survey: Codable, Sendable, Equatable {
         copy.concerns = concerns?.filter { $0 != .unknown }
         if copy.concerns?.isEmpty == true { copy.concerns = nil }
         if copy.currentProducts?.isEmpty == true { copy.currentProducts = nil }
+        copy.avoidIngredients = avoidIngredients?.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if copy.avoidIngredients?.isEmpty == true { copy.avoidIngredients = nil }
         if copy.note?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true { copy.note = nil }
         return copy
     }
@@ -88,10 +94,16 @@ struct AnalysisView: Decodable, Sendable {
     let createdAt: Date
     let completedAt: Date?
     let survey: Survey?
+    let generation: GenerationMetadata?
+
+    var canDisplayRecommendation: Bool {
+        status == .completed && recommendationStatus == .generated && recommendation != nil
+            && generation?.preventsRecommendation != true
+    }
 
     enum CodingKeys: String, CodingKey {
         case analysisId, status, disease, recommendationStatus, recommendation, guidance, error
-        case queuePosition, estimatedWaitSec, createdAt, completedAt, survey
+        case queuePosition, estimatedWaitSec, createdAt, completedAt, survey, generation
     }
 
     init(from decoder: any Decoder) throws {
@@ -108,6 +120,26 @@ struct AnalysisView: Decodable, Sendable {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt)
         survey = try container.decodeIfPresent(Survey.self, forKey: .survey)
+        generation = try container.decodeIfPresent(GenerationMetadata.self, forKey: .generation)
+    }
+}
+
+struct GenerationMetadata: Decodable, Sendable {
+    let origin: GenerationOrigin?
+    let qualityStatus: String?
+    let evidenceStatus: String?
+    let qualityIssues: [String]?
+
+    var preventsRecommendation: Bool {
+        origin == .notGenerated || qualityStatus == "withheld" || evidenceStatus == "withheld"
+    }
+
+    var sourceNotice: String? {
+        switch origin {
+        case .sourceCards: "근거 자료를 바탕으로 구성한 대체 안내예요. 모델이 생성한 답변과 구별해 제공해요."
+        case .ruleFallback: "기본 관리 규칙으로 구성한 대체 안내예요."
+        default: nil
+        }
     }
 }
 
@@ -134,6 +166,8 @@ struct Ingredient: Decodable, Sendable, Identifiable {
     let name: String
     let purpose: String?
     let priority: Int
+    var purposeSource: String?
+    var purposeStatus: String?
 
     var id: String { "\(priority)-\(name)" }
 }

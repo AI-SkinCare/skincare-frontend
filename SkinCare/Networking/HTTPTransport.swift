@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// URLSession으로 요청 한 건을 보내고 `{ success, data, error }`를 풀어준다. 토큰 재발급은 모른다.
 struct HTTPTransport: Sendable {

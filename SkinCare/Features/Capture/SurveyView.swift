@@ -153,6 +153,8 @@ private struct SurveyStepTwo: View {
                 }
             }
 
+            AvoidIngredientsField(ingredients: $survey.avoidIngredients)
+
             SurveyQuestion(title: "사용 중인 제품", caption: "\(survey.currentProducts?.count ?? 0) / \(Survey.maxProducts)") {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     HStack(spacing: Spacing.xs) {
