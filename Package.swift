@@ -15,7 +15,8 @@ let package = Package(
             "App/AppCopy.swift", "App/AppConfig.swift"
         ]),
         .testTarget(name: "ContractTests", dependencies: ["SkinCare"], path: "SkinCareTests", sources: [
-            "DecodingTests.swift", "APIClientTests.swift", "PollingPolicyTests.swift", "GenerationTests.swift"
+            "DecodingTests.swift", "APIClientTests.swift", "PollingPolicyTests.swift", "GenerationTests.swift",
+            "ClassificationExplanationTests.swift"
         ])
     ]
 )

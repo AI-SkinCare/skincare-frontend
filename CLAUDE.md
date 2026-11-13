@@ -65,6 +65,7 @@
 | `docs/common/04_개발운영계획서_스킨케어.docx` / `.pdf` | 개발 일정, 환경, 배포·운영 계획 (FE 부분은 패치 문서 §4 참고) |
 | `docs/patch/02_pipeline-revision-checklist.md` | 개정 기획 변경점 브리핑, 백엔드 합의 항목(B1–B9), 앱 반영 체크리스트 — 작업 시 체크 갱신 |
 | `docs/patch/20261112-ai-generation.md` | 추천 품질 보류, 생성 출처, 회피 성분 전달과 로컬 연동 시험 |
+| `docs/patch/20261113-gradcam.md` | Grad-CAM 선택형 응답과 모델 분류 참고 영역 표시 |
 | `docs/patch/01_swift-ios-patch.md` | 공통 문서 iOS(Swift) 패치 — 공통 문서보다 우선. 팀 합의 필요 항목(§0) 포함 |
 | `docs/design/design.md` | 디자인 시스템 (색상, 타이포, 레이아웃, 컴포넌트, Do/Don't) |
 | `docs/design/skincare_icon_transparent.png`, `.ico` | 앱 아이콘 원본. iOS용(불투명·정사각 1024)은 `SkinCare/Resources/Assets.xcassets/AppIcon.appiconset/` — 원본을 바꾸면 다시 변환 필요 |

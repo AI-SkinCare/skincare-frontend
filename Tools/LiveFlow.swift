@@ -69,6 +69,8 @@ private enum FlowFailure: Error { case check(String) }
                 try raw.write(to: URL(fileURLWithPath: input.outputDirectory).appending(path: "\(item.name)-response.json"))
                 try require(!analysis.status.isInProgress, "poll deadline")
                 try require(analysis.disease == initial, "classification changed while polling")
+                try require(analysis.disease.explanation?.heatmapData(for: analysis.disease) != nil,
+                            "validated Grad-CAM missing from saved classification")
                 try require(analysis.error == nil, "analysis failed")
                 try require(analysis.recommendationStatus?.rawValue == item.expectedRecommendationStatus,
                             "unexpected terminal state for \(item.name): \(analysis.recommendationStatus?.rawValue ?? "nil")")
@@ -94,11 +96,12 @@ private enum FlowFailure: Error { case check(String) }
                 results.append(["case": item.name, "states": states, "recommendationStatus": item.expectedRecommendationStatus,
                     "origin": analysis.generation?.origin?.rawValue ?? "unknown", "seconds": Date().timeIntervalSince(start),
                     "canDisplayRecommendation": analysis.canDisplayRecommendation, "classificationPreserved": true,
-                    "avoidIngredientsPreserved": true])
+                    "avoidIngredientsPreserved": true, "gradCAMMatchesClassification": true])
                 print("PASS \(item.name) \(analysis.status.rawValue) \(analysis.generation?.origin?.rawValue ?? "unknown")")
             }
             let page = try await api.send(AnalysisAPI.list(page: 1))
             try require(Set(page.items.map(\.analysisId)) == Set(ids), "history mismatch")
+            try require(page.items.allSatisfy { $0.disease.explanation == nil }, "history contains unnecessary map data")
             let fresh = try await api.send(AuthAPI.refresh(refreshToken: store.load()))
             await api.tokens.apply(fresh)
             _ = try await api.send(UsersAPI.me())

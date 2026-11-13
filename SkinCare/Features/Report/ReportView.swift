@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// SCR-08 결과 리포트. 이미지 분류 참고 결과를 바로 보여주고, 추천은 진행 상태에 따라 바뀐다.
 struct ReportView: View {
@@ -42,11 +43,41 @@ struct ReportView: View {
                 ClassificationHero(analysis: analysis)
                 GuidanceBox(lines: analysis.guidance)
                 ScoreBreakdown(disease: analysis.disease)
+                ClassificationExplanationCard(disease: analysis.disease)
                 RecommendationSection(model: model, analysis: analysis)
             }
             .padding(.horizontal, Spacing.screen)
             .padding(.top, Spacing.xs)
             .padding(.bottom, Spacing.xl)
+        }
+    }
+}
+
+private struct ClassificationExplanationCard: View {
+    let disease: Disease
+
+    var body: some View {
+        if let explanation = disease.explanation {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                SectionTitle(title: AppCopy.explanationTitle)
+                if let data = explanation.heatmapData(for: disease), let image = UIImage(data: data) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: AttributionSize.mapSide)
+                        .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
+                        .accessibilityLabel(AppCopy.explanationAccessibility)
+                    Text(AppCopy.explanationNotice)
+                        .appText(.caption)
+                        .foregroundStyle(.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text(AppCopy.explanationUnavailable)
+                        .appText(.bodySmall)
+                        .foregroundStyle(.textMuted)
+                }
+            }
+            .card(.outlined, padding: Spacing.md, radius: Radius.sm)
         }
     }
 }
