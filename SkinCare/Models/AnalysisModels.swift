@@ -14,11 +14,14 @@ struct Survey: Codable, Sendable, Equatable {
     var concerns: [Concern]?
     var currentProducts: [String]?
     var note: String?
+    var avoidIngredients: [String]?
 
     static let maxConcerns = 3
     static let maxProducts = 5
     static let maxProductLength = 30
     static let maxNoteLength = 300
+    static let maxAvoidIngredients = 30
+    static let maxIngredientLength = 100
     static let sleepHoursRange = 0...14
 
     var hasRequiredFields: Bool {
@@ -35,6 +38,9 @@ struct Survey: Codable, Sendable, Equatable {
         copy.concerns = concerns?.filter { $0 != .unknown }
         if copy.concerns?.isEmpty == true { copy.concerns = nil }
         if copy.currentProducts?.isEmpty == true { copy.currentProducts = nil }
+        copy.avoidIngredients = avoidIngredients?.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if copy.avoidIngredients?.isEmpty == true { copy.avoidIngredients = nil }
         if copy.note?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true { copy.note = nil }
         return copy
     }
@@ -51,6 +57,36 @@ struct Disease: Decodable, Sendable, Equatable {
     let uncertain: Bool
     /// 6종 라벨(한글) → 0–1
     let probabilities: [String: Double]
+    let modelVersion: String?
+    let explanation: ClassificationExplanation?
+
+    init(label: String, labelEn: DiseaseClass, confidence: Double, uncertain: Bool,
+         probabilities: [String: Double], modelVersion: String? = nil,
+         explanation: ClassificationExplanation? = nil) {
+        self.label = label
+        self.labelEn = labelEn
+        self.confidence = confidence
+        self.uncertain = uncertain
+        self.probabilities = probabilities
+        self.modelVersion = modelVersion
+        self.explanation = explanation
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case label, labelEn, confidence, uncertain, probabilities, modelVersion, explanation
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        label = try container.decode(String.self, forKey: .label)
+        labelEn = try container.decode(DiseaseClass.self, forKey: .labelEn)
+        confidence = try container.decode(Double.self, forKey: .confidence)
+        uncertain = try container.decode(Bool.self, forKey: .uncertain)
+        probabilities = try container.decode([String: Double].self, forKey: .probabilities)
+        modelVersion = try? container.decodeIfPresent(String.self, forKey: .modelVersion)
+        // A malformed optional visualization must not hide the classification.
+        explanation = try? container.decodeIfPresent(ClassificationExplanation.self, forKey: .explanation)
+    }
 
     /// "90%"
     var confidencePercent: String { Self.percent(confidence) }
@@ -66,6 +102,29 @@ struct Disease: Decodable, Sendable, Equatable {
 
     static func percent(_ value: Double) -> String {
         "\(Int((min(max(value, 0), 1) * 100).rounded()))%"
+    }
+}
+
+struct ClassificationExplanation: Decodable, Sendable, Equatable {
+    let available: Bool
+    let method: String
+    let targetLabel: String
+    let modelVersion: String
+    let heatmapPngBase64: String?
+    let interpretation: String?
+    let unavailableReason: String?
+
+    func heatmapData(for disease: Disease) -> Data? {
+        guard available, method == "grad_cam", targetLabel == disease.label,
+              modelVersion == disease.modelVersion,
+              let encoded = heatmapPngBase64, encoded.utf8.count <= 120_000,
+              let data = Data(base64Encoded: encoded), data.count >= 33, data.count <= 90_000 else { return nil }
+        let bytes = [UInt8](data.prefix(33))
+        guard Array(bytes.prefix(8)) == [137, 80, 78, 71, 13, 10, 26, 10],
+              Array(bytes[12..<16]) == [73, 72, 68, 82],
+              Array(bytes[16..<20]) == [0, 0, 1, 0], Array(bytes[20..<24]) == [0, 0, 1, 0],
+              bytes[24] == 8, bytes[25] == 0 else { return nil }
+        return data
     }
 }
 
@@ -88,10 +147,16 @@ struct AnalysisView: Decodable, Sendable {
     let createdAt: Date
     let completedAt: Date?
     let survey: Survey?
+    let generation: GenerationMetadata?
+
+    var canDisplayRecommendation: Bool {
+        status == .completed && recommendationStatus == .generated && recommendation != nil
+            && generation?.preventsRecommendation != true
+    }
 
     enum CodingKeys: String, CodingKey {
         case analysisId, status, disease, recommendationStatus, recommendation, guidance, error
-        case queuePosition, estimatedWaitSec, createdAt, completedAt, survey
+        case queuePosition, estimatedWaitSec, createdAt, completedAt, survey, generation
     }
 
     init(from decoder: any Decoder) throws {
@@ -108,6 +173,26 @@ struct AnalysisView: Decodable, Sendable {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt)
         survey = try container.decodeIfPresent(Survey.self, forKey: .survey)
+        generation = try container.decodeIfPresent(GenerationMetadata.self, forKey: .generation)
+    }
+}
+
+struct GenerationMetadata: Decodable, Sendable {
+    let origin: GenerationOrigin?
+    let qualityStatus: String?
+    let evidenceStatus: String?
+    let qualityIssues: [String]?
+
+    var preventsRecommendation: Bool {
+        origin == .notGenerated || qualityStatus == "withheld" || evidenceStatus == "withheld"
+    }
+
+    var sourceNotice: String? {
+        switch origin {
+        case .sourceCards: "근거 자료를 바탕으로 구성한 대체 안내예요. 모델이 생성한 답변과 구별해 제공해요."
+        case .ruleFallback: "기본 관리 규칙으로 구성한 대체 안내예요."
+        default: nil
+        }
     }
 }
 
@@ -134,6 +219,8 @@ struct Ingredient: Decodable, Sendable, Identifiable {
     let name: String
     let purpose: String?
     let priority: Int
+    var purposeSource: String?
+    var purposeStatus: String?
 
     var id: String { "\(priority)-\(name)" }
 }

@@ -16,7 +16,7 @@
 - **제외된 기능**: 수분·탄력·색소침착·모공 4개 지표 회귀, 9개 ROI 분할, 촬영 환경 보정, 종합 점수·등급. → 앱에서 모두 제거함 (결과 리포트는 분류 + 추천 구조로 재구성, 추이 화면 삭제).
 - **API 계약 (백엔드 확정, `docs/new_common/api변경사항.md`가 기준)**: `POST /api/v1/analyses`(image + survey JSON) → `GET /api/v1/analyses/{id}` 조회. 응답은 모두 `AnalysisView`. 이력·삭제·재요청·시스템 상태 API 유지, 추이 API 삭제, `deviceType` 삭제. 리프레시 토큰 본문 전달(패치 A2) 반영됨.
   - 작업 상태 `status`: `QUEUED` · `GENERATING` · `COMPLETED` · `WITHHELD`(추천 보류) · `FAILED`
-  - AI 결과 `recommendationStatus`: `generated` · `uncertain`(분류 점수 0.6 미만 등 → 재촬영·상담 안내) · `no_concern`(정상 + 고민 없음 → 설문 선택 안내)
+  - AI 결과 `recommendationStatus`: `generated` · `uncertain`(분류 불확실) · `no_concern`(정상 + 고민 없음) · `quality_rejected`(근거/품질 조건 미충족). 상세 응답의 `generation.origin=not_generated`는 미생성을 뜻하며 상태 코드와 구별한다.
   - `disease`: `label`, `labelEn`, `confidence`, `uncertain`, `probabilities`(6종). 점수를 보여줄 때는 반드시 **"모델 분류 점수"**로 표기하고 질환 확률처럼 보이게 하지 않는다.
   - 추천 객체 구조(skinType·concerns `{code,label}`, ingredients·routine·reasoning·answer·disclaimer)는 기존과 같음. `guidance` 안내 문장 상시 표시. 보류는 오류가 아니며 빈 추천으로 대체하지 않는다.
 - **폴링**: 처음 3분 3초, 이후 10초, **150초 이후 지연 안내, 최대 30분**(기존 15분).
@@ -64,6 +64,8 @@
 | `docs/common/03_화면설계서_스킨케어.docx` / `.pdf` | 화면 구성·흐름 |
 | `docs/common/04_개발운영계획서_스킨케어.docx` / `.pdf` | 개발 일정, 환경, 배포·운영 계획 (FE 부분은 패치 문서 §4 참고) |
 | `docs/patch/02_pipeline-revision-checklist.md` | 개정 기획 변경점 브리핑, 백엔드 합의 항목(B1–B9), 앱 반영 체크리스트 — 작업 시 체크 갱신 |
+| `docs/patch/20261112-ai-generation.md` | 추천 품질 보류, 생성 출처, 회피 성분 전달과 로컬 연동 시험 |
+| `docs/patch/20261113-gradcam.md` | Grad-CAM 선택형 응답과 모델 분류 참고 영역 표시 |
 | `docs/patch/01_swift-ios-patch.md` | 공통 문서 iOS(Swift) 패치 — 공통 문서보다 우선. 팀 합의 필요 항목(§0) 포함 |
 | `docs/design/design.md` | 디자인 시스템 (색상, 타이포, 레이아웃, 컴포넌트, Do/Don't) |
 | `docs/design/skincare_icon_transparent.png`, `.ico` | 앱 아이콘 원본. iOS용(불투명·정사각 1024)은 `SkinCare/Resources/Assets.xcassets/AppIcon.appiconset/` — 원본을 바꾸면 다시 변환 필요 |

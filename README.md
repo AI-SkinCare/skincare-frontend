@@ -1,5 +1,7 @@
 # skincare-frontend
 
+결과 화면의 Grad-CAM 참고 영역 표시: [적용 기록](docs/patch/20261113-gradcam.md).
+
 스마트폰 피부 이미지 분류와 맞춤 성분 추천 AI 서비스의 프론트엔드(iOS 앱) 저장소입니다.
 
 ## 역할

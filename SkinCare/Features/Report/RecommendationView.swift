@@ -9,8 +9,16 @@ struct RecommendationView: View {
 
     var body: some View {
         Group {
-            if analysis?.status == .completed, let recommendation = analysis?.recommendation {
+            if analysis?.canDisplayRecommendation == true, let recommendation = analysis?.recommendation {
                 content(recommendation)
+            } else if let analysis, analysis.status == .withheld || analysis.generation?.preventsRecommendation == true {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        Text(AnalysisDisplay.withheldTitle(analysis.recommendationStatus)).appText(.title)
+                        ForEach(analysis.guidance, id: \.self) { Text($0).appText(.body) }
+                    }
+                    .padding(Spacing.screen)
+                }
             } else if let errorMessage {
                 ErrorStateView(message: errorMessage) { Task { await load() } }
             } else if analysis != nil {
@@ -38,6 +46,9 @@ struct RecommendationView: View {
     private func content(_ recommendation: Recommendation) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xxl) {
+                if let notice = analysis?.generation?.sourceNotice {
+                    Text(notice).appText(.bodySmall).foregroundStyle(.textMuted)
+                }
                 SummaryHeader(recommendation: recommendation)
                 IngredientsSection(ingredients: recommendation.ingredients ?? [])
                 RoutineSection(steps: recommendation.routine ?? [])
