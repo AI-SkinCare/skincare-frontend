@@ -72,7 +72,7 @@
 
 ### NFR-SEC-01 HTTPS
 
-- 그대로. 단, **Debug 빌드에서만** 로컬 백엔드(`http://localhost:3000`, `http://<맥 LAN IP>:3000`)용 ATS 예외를 둔다. Release 빌드에는 ATS 예외를 넣지 않는다.
+- 그대로. 단, **Debug 빌드에서만** 로컬 백엔드(`http://localhost:8080`, `http://<맥 LAN IP>:8080`)용 ATS 예외를 둔다. Release 빌드에는 ATS 예외를 넣지 않는다.
 
 ### NFR-PRI-01 원본 이미지 미저장 — 앱 측 규칙 추가
 
@@ -198,7 +198,7 @@
 문제:
 
 1. `httpOnly`·`SameSite`는 브라우저 보안 장치라 네이티브 앱에는 의미가 없다.
-2. URLSession도 쿠키를 저장하긴 하지만 `Secure` 쿠키는 HTTP로 보내지지 않아 **로컬 개발(`http://localhost:3000`)에서 재발급이 항상 실패**한다.
+2. URLSession도 쿠키를 저장하긴 하지만 `Secure` 쿠키는 HTTP로 보내지지 않아 **로컬 개발(`http://localhost:8080`)에서 재발급이 항상 실패**한다.
 3. 쿠키 저장소는 앱이 직접 제어하기 어렵고, 로그아웃·탈퇴 시 확실히 지웠는지 확인하기 어렵다.
 
 수정 제안 (백엔드 변경 최소화):
@@ -229,7 +229,7 @@
 | 서버 상태 | TanStack Query refetch | `@Observable` 화면 모델 + `async/await`. 폴링은 `Task` + `Task.sleep`, 규칙은 §2 SCR-08 |
 | HTTP | axios 1개, withCredentials, 401 시 refresh single-flight | `APIClient` 1개 (URLSession). 401(E1001)이면 refresh 후 원 요청 1회 재시도. **single-flight는 actor로 구현** — 동시에 여러 401이 와도 refresh 요청은 하나만, 나머지는 그 결과를 기다림 (원문 이유 그대로 유효: 교체 방식이라 두 번 보내면 로그아웃됨) |
 | 토큰 | 메모리 + httpOnly 쿠키, 앱 시작 시 /auth/refresh | 메모리 + Keychain (§3.1). 앱 시작 시 스플래시에서 Keychain 토큰으로 /auth/refresh → 성공 시 메인, 실패 시 로그인 |
-| 로컬 개발 | Vite proxy /api → localhost:3000 | 프록시 없음. 시뮬레이터: `http://localhost:3000/api/v1`, 실기기: `http://<맥 LAN IP>:3000/api/v1` 또는 터널. xcconfig로 전환 (§4.2) |
+| 로컬 개발 | Vite proxy /api → localhost:3000 | 프록시 없음. 시뮬레이터: `http://localhost:8080/api/v1`, 실기기: `http://<맥 LAN IP>:8080/api/v1` 또는 터널. xcconfig로 전환 (§4.2) |
 | 타입 | openapi-typescript | 백엔드 Swagger 기준으로 `Codable` 모델 직접 작성 (화면 수가 적어 생성기 도입 비용이 더 큼). 필요 시 swift-openapi-generator 검토 |
 | 이미지 | 캔버스 리사이즈 1600px, JPEG 0.9 | `UIGraphicsImageRenderer`(또는 ImageIO)로 리사이즈 1600px, JPEG 0.9, 메타데이터 제거 (§2 SCR-05) |
 | 날짜 | (프론트가 KST 변환) | `ISO8601DateFormatter`로 파싱, 표시는 `TimeZone(identifier: "Asia/Seoul")` 고정 |
@@ -272,7 +272,7 @@
 
 | 원문 변수 | 수정 |
 |-----------|------|
-| `VITE_API_BASE_URL=/api/v1` | `API_BASE_URL` — `Debug.xcconfig`: `http://localhost:3000/api/v1`, `Release.xcconfig`: `https://app.<도메인>/api/v1` |
+| `VITE_API_BASE_URL=/api/v1` | `API_BASE_URL` — `Debug.xcconfig`: `http://localhost:8080/api/v1`, `Release.xcconfig`: `https://app.<도메인>/api/v1` |
 | `VITE_POLL_INTERVAL_MS` 등 폴링 값 | 환경변수 아님 — 코드 상수 (`PollingPolicy`: 3초 / 3분 후 10초 / 150초 지연 안내 / 30분 중단) |
 
 - 실기기 테스트용 개인 값(맥 LAN IP 등)은 `Local.xcconfig`에 두고 `.gitignore` 처리 (`*.local.xcconfig`).
@@ -297,7 +297,7 @@
 - 원문 `npm ci && npm run dev` 삭제 →
   1. Xcode(최신 안정판)에서 `.xcodeproj` 열기
   2. 백엔드를 개발 모드로 로컬 실행 (fixture 응답, API 변경사항 §1.5)
-  3. Debug 스킴 + iPhone 시뮬레이터로 실행 → `localhost:3000`에 직접 연결
+  3. Debug 스킴 + iPhone 시뮬레이터로 실행 → `localhost:8080`에 직접 연결
   4. 실기기: `Local.xcconfig`에 맥 LAN IP 지정, 맥과 같은 Wi-Fi
 - 도구 표: `Node.js 20 LTS (프론트)` → `Xcode 최신 안정판, macOS`. (백엔드 개발용 Node는 그대로)
 
