@@ -66,6 +66,7 @@ enum Formatting {
     }
 
     /// 요약 문단에서 앞 2문장 (SCR-08 "요약 문단(answer 앞 2문장)")
+    #if canImport(Darwin)
     static func leadingSentences(_ text: String, count: Int = 2) -> String {
         var sentences: [String] = []
         text.enumerateSubstrings(in: text.startIndex..., options: [.bySentences, .localized]) { substring, _, _, stop in
@@ -76,4 +77,5 @@ enum Formatting {
         }
         return sentences.isEmpty ? text : sentences.joined(separator: " ")
     }
+    #endif
 }

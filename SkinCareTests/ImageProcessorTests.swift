@@ -52,13 +52,30 @@ struct ImageProcessorTests {
 
     // MARK: - 테스트 이미지
 
-    private func makeJPEG(width: Int, height: Int, orientation: Int = 1, withGPS: Bool = false) throws -> Data {
+    @Test("단색 이미지는 업로드 전에 재촬영을 안내한다")
+    func rejectsUniformImage() throws {
+        let data = try makeJPEG(width: 1000, height: 800, uniform: true)
+        #expect(throws: ImageValidationError.uniform) { try ImageProcessor.process(data) }
+    }
+
+    @Test("기하학 패턴을 정면 얼굴 분석으로 보내지 않는다")
+    func rejectsNonFaceBeforeAnalysis() throws {
+        let data = try makeJPEG(width: 900, height: 900)
+        #expect(throws: ImageValidationError.faceFraming) { try ImageProcessor.prepareForAnalysis(data) }
+    }
+
+    private func makeJPEG(width: Int, height: Int, orientation: Int = 1, withGPS: Bool = false,
+                          uniform: Bool = false) throws -> Data {
         let context = try #require(CGContext(
             data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
             space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
         ))
         context.setFillColor(CGColor(red: 0.8, green: 0.6, blue: 0.5, alpha: 1))
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        if !uniform {
+            context.setFillColor(CGColor(gray: 0.3, alpha: 1))
+            context.fill(CGRect(x: 0, y: 0, width: width / 3, height: height))
+        }
         let image = try #require(context.makeImage())
 
         var properties: [CFString: Any] = [kCGImagePropertyOrientation: orientation]

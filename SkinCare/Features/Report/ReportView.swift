@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// SCR-08 결과 리포트. 이미지 분류 참고 결과를 바로 보여주고, 추천은 진행 상태에 따라 바뀐다.
 struct ReportView: View {
@@ -42,11 +43,41 @@ struct ReportView: View {
                 ClassificationHero(analysis: analysis)
                 GuidanceBox(lines: analysis.guidance)
                 ScoreBreakdown(disease: analysis.disease)
+                ClassificationExplanationCard(disease: analysis.disease)
                 RecommendationSection(model: model, analysis: analysis)
             }
             .padding(.horizontal, Spacing.screen)
             .padding(.top, Spacing.xs)
             .padding(.bottom, Spacing.xl)
+        }
+    }
+}
+
+private struct ClassificationExplanationCard: View {
+    let disease: Disease
+
+    var body: some View {
+        if let explanation = disease.explanation {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                SectionTitle(title: AppCopy.explanationTitle)
+                if let data = explanation.heatmapData(for: disease), let image = UIImage(data: data) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: AttributionSize.mapSide)
+                        .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
+                        .accessibilityLabel(AppCopy.explanationAccessibility)
+                    Text(AppCopy.explanationNotice)
+                        .appText(.caption)
+                        .foregroundStyle(.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text(AppCopy.explanationUnavailable)
+                        .appText(.bodySmall)
+                        .foregroundStyle(.textMuted)
+                }
+            }
+            .card(.outlined, padding: Spacing.md, radius: Radius.sm)
         }
     }
 }
@@ -174,8 +205,10 @@ private struct RecommendationSection: View {
         case .queued, .generating:
             pendingCard
         case .completed:
-            if let recommendation = analysis.recommendation {
+            if analysis.canDisplayRecommendation, let recommendation = analysis.recommendation {
                 doneCard(recommendation)
+            } else {
+                withheldCard
             }
         case .withheld:
             withheldCard
@@ -248,7 +281,7 @@ private struct RecommendationSection: View {
                     .buttonStyle(.primary)
             }
             .card(.soft)
-        } else {
+        } else if analysis.recommendationStatus == .uncertain {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 Label("분류가 불확실해 추천을 보류했어요", systemImage: "questionmark.circle")
                     .appText(.link)
@@ -259,6 +292,17 @@ private struct RecommendationSection: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Button("다시 촬영하기") { router.isCaptureFlowPresented = true }
                     .buttonStyle(.primary)
+            }
+            .card(.soft)
+        } else {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                Label(AnalysisDisplay.withheldTitle(analysis.recommendationStatus), systemImage: "info.circle")
+                    .appText(.link)
+                    .foregroundStyle(.ink)
+                Text("사용 조건과 추천 기준에 맞는 안내를 제공하지 못했어요. 위 안내를 확인해 주세요. 피해야 할 성분은 유지해 주세요.")
+                    .appText(.bodySmall)
+                    .foregroundStyle(.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .card(.soft)
         }
@@ -293,6 +337,9 @@ private struct RecommendationSection: View {
 
     private func doneCard(_ recommendation: Recommendation) -> some View {
         VStack(alignment: .leading, spacing: Spacing.lg) {
+            if let notice = analysis.generation?.sourceNotice {
+                Text(notice).appText(.bodySmall).foregroundStyle(.textMuted)
+            }
             ProfileChips(recommendation: recommendation)
 
             if let answer = recommendation.answer, !answer.isEmpty {

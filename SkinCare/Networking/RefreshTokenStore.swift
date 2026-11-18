@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(Security)
 import Security
+#endif
 
 protocol RefreshTokenStoring: Sendable {
     func load() -> String?
@@ -8,6 +10,7 @@ protocol RefreshTokenStoring: Sendable {
 }
 
 /// 리프레시 토큰을 Keychain(이 기기 전용)에 저장한다. 패치 문서 §3.1.
+#if canImport(Security)
 struct KeychainRefreshTokenStore: RefreshTokenStoring {
     private let service = "com.aiskincare.skincare.auth"
     private let account = "refreshToken"
@@ -42,3 +45,4 @@ struct KeychainRefreshTokenStore: RefreshTokenStoring {
         SecItemDelete(baseQuery as CFDictionary)
     }
 }
+#endif

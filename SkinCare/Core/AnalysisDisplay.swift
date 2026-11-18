@@ -12,11 +12,20 @@ enum AnalysisDisplay {
         case .queued, .generating:
             ("맞춤 추천 작성 중", .progress)
         case .withheld:
-            recommendation == .noConcern ? ("추천 보류 · 선택한 고민 없음", .neutral) : ("추천 보류 · 분류 불확실", .neutral)
+            (withheldTitle(recommendation), .neutral)
         case .failed:
             ("추천을 만들지 못했어요", .negative)
         case .completed, .unknown:
             nil
+        }
+    }
+
+    static func withheldTitle(_ status: RecommendationStatus?) -> String {
+        switch status {
+        case .noConcern: "추천 보류 · 선택한 고민 없음"
+        case .uncertain: "추천 보류 · 분류 불확실"
+        case .qualityRejected: "추천 보류 · 추천 기준 미충족"
+        default: "추천을 제공하지 않았어요"
         }
     }
 }

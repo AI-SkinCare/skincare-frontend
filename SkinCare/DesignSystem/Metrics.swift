@@ -27,3 +27,7 @@ enum ControlSize {
     static let buttonHeight: CGFloat = 52
     static let minTouch: CGFloat = 44
 }
+
+enum AttributionSize {
+    static let mapSide: CGFloat = 256
+}

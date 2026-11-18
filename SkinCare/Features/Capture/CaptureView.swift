@@ -6,15 +6,15 @@ import SwiftUI
 struct CaptureView: View {
     @Environment(CaptureFlowModel.self) private var model
     @State private var pickerItem: PhotosPickerItem?
+    @State private var useRearCamera = false
 
     @State private var showsCamera = Self.opensCameraOnStart
 
-    /// 전면 카메라가 있을 때만 촬영 버튼을 보인다. Debug 빌드는 시뮬레이터에서도 카메라 화면을 확인할 수 있게 항상 보인다.
     private var cameraAvailable: Bool {
         #if DEBUG
         true
         #else
-        AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front) != nil
+        AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: useRearCamera ? .back : .front) != nil
         #endif
     }
 
@@ -48,6 +48,14 @@ struct CaptureView: View {
                         .foregroundStyle(.negative)
                 }
 
+                Picker("촬영 방법", selection: $useRearCamera) {
+                    Text("셀프 촬영").tag(false)
+                    Text("다른 사람이 촬영").tag(true)
+                }
+                .pickerStyle(.segmented)
+                Text("눈높이에서 양쪽 볼이 보이게 정면을 찍어 주세요. 사진에 보이지 않는 부위는 평가하기 어려워요.")
+                    .appText(.bodySmall)
+                    .foregroundStyle(.textMuted)
                 sourceButtons
             }
             .padding(.horizontal, Spacing.screen)
@@ -75,7 +83,7 @@ struct CaptureView: View {
             }
         }
         .fullScreenCover(isPresented: $showsCamera) {
-            CameraView { data in
+            CameraView(useRearCamera: useRearCamera) { data in
                 Task { await model.handlePickedImage(data) }
             }
         }

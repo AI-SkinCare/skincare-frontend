@@ -39,11 +39,21 @@ enum RecommendationStatus: String, Codable, Sendable, UnknownCaseDecodable {
     case uncertain
     /// 정상 분류 + 고른 고민 없음 → 설문에서 고민 선택 안내
     case noConcern = "no_concern"
+    case qualityRejected = "quality_rejected"
     case unknown
     static let unknownCase = RecommendationStatus.unknown
 }
 
 // MARK: - 이미지 분류 (DenseNet121 6종)
+
+enum GenerationOrigin: String, Decodable, Sendable, UnknownCaseDecodable {
+    case model
+    case sourceCards = "source_cards"
+    case ruleFallback = "rule_fallback"
+    case notGenerated = "not_generated"
+    case unknown
+    static let unknownCase = GenerationOrigin.unknown
+}
 
 /// 분류 라벨 영문 코드. 화면에는 서버의 한글 `label`을 그대로 쓴다 (팀 결정).
 enum DiseaseClass: String, Codable, Sendable, UnknownCaseDecodable {
