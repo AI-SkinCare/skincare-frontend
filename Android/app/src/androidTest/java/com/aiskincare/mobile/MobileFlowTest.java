@@ -46,7 +46,7 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
                 onUi(()->{
                     List<Button> buttons=new ArrayList<>();
                     collect(dialog.get().getWindow().getDecorView(),Button.class,buttons);
-                    for(Button b:buttons) if("사진 촬영".contentEquals(b.getText()) && b.isEnabled()) b.performClick();
+                    for(Button b:buttons) if("사진 촬영".contentEquals(b.getContentDescription()) && b.isEnabled()) b.performClick();
                 });
                 SystemClock.sleep(200);
             }
@@ -84,7 +84,11 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
                 List<EditText> fields=views(EditText.class);
                 fields.get(0).setText(email); fields.get(1).setText(password); click("로그인");
             });
-            await("정면 사진",20000);
+            await("피부 분석 시작",20000);
+            onUi(()->click("피부 분석 시작"));
+            if (hasText("촬영 화면으로")) onUi(()->click("촬영 화면으로"));
+            await("얼굴 사진을 준비해 주세요.",5000);
+            onUi(()->assertFalse(button("다음").isEnabled()));
             Bitmap sample=Bitmap.createBitmap(840,800,Bitmap.Config.ARGB_8888);
             sample.eraseColor(0xffb9cecd);
             java.io.ByteArrayOutputStream flat=new java.io.ByteArrayOutputStream();
@@ -113,17 +117,38 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             assertFaceRejected(flat.toByteArray());
             try(FileOutputStream f=new FileOutputStream(input)){ f.write(portrait); }
             onUi(()->app.onActivityResult(20,Activity.RESULT_OK,new Intent().setData(Uri.fromFile(input))));
-            await("이 사진으로 설문 작성",10000);
+            await("이 사진으로 분석할게요.",10000);
             captureScreen("capture");
-            onUi(()->click("이 사진으로 설문 작성"));
-            await("오늘의 설문",3000);
+            onUi(()->click("다음"));
+            await("기본 정보를 알려 주세요.",3000);
+            getInstrumentation().waitForIdleSync();
             onUi(()->{
-                List<Spinner> spinners=views(Spinner.class);
-                spinners.get(0).setSelection(1); spinners.get(1).setSelection(3);
-                for(CheckBox box:views(CheckBox.class)) if(box.getText().toString().equals("건조·각질")) box.setChecked(true);
+                Button lastAge = button("70대");
+                assertEquals("Empty grid cells must not stretch the age row",
+                        lastAge.getHeight(), ((View) lastAge.getParent()).getHeight());
+                assertFalse(button("다음").isEnabled());
+                click("여성");
+                click("30대");
+                click("중성");
+                assertTrue(button("다음").isEnabled());
             });
             captureScreen("survey");
-            onUi(()->click("사진과 설문 제출"));
+            onUi(()->click("다음"));
+            await("피부 상태와 생활 습관",4000);
+            onUi(()->{
+                click("가끔");
+                click("건조함");
+                click("1~4주");
+                click("볼");
+                click("건조·각질");
+                getActivity().onBackPressed();
+                assertTrue(button("여성").isSelected());
+                assertTrue(button("30대").isSelected());
+                click("다음");
+                assertTrue(button("가끔").isSelected());
+                assertTrue(button("볼").isSelected());
+                click("분석 시작");
+            });
             await("분석 결과",65000);
             long limit=SystemClock.elapsedRealtime()+180000;
             while(!hasText("완료") && !hasText("추천 보류") && SystemClock.elapsedRealtime()<limit) {
@@ -131,7 +156,14 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             }
             assertTrue(hasText("완료") || hasText("추천 보류"));
             captureScreen("report");
-            onUi(()->click("지난 분석 보기")); await("지난 분석",5000);
+            if (hasText("완료")) {
+                onUi(()->click("추천 자세히 보기"));
+                await("추천 성분",5000);
+                if (hasText("관리 루틴")) onUi(()->{ click("저녁"); assertTrue(button("저녁").isSelected()); });
+                onUi(()->getActivity().onBackPressed());
+                await("분석 결과",5000);
+            }
+            onUi(()->click("지난 분석 보기")); await("이력",5000);
             account.login(email,password);
             java.lang.reflect.Field accessToken = SpringClient.class.getDeclaredField("access");
             accessToken.setAccessible(true);
@@ -140,6 +172,11 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             JSONObject detail=account.detail(item.getString("analysisId"));
             assertTrue(detail.getJSONObject("disease").has("confidence"));
             assertEquals("30s",detail.getJSONObject("survey").getString("ageBand"));
+            JSONObject symptom = detail.getJSONObject("survey").getJSONObject("symptomProfile");
+            assertEquals("occasional", symptom.getString("itch"));
+            assertEquals("dry", symptom.getString("flaking"));
+            assertEquals("one_to_four_weeks", symptom.getString("onset"));
+            assertEquals("cheeks", symptom.getJSONArray("areas").getString(0));
             if("COMPLETED".equals(detail.getString("status"))) assertTrue(MainActivity.showRecommendation(detail));
             else assertEquals("WITHHELD",detail.getString("status"));
             android.util.Log.i("SkinCareTest","status="+detail.getString("status")+"; recommendation="+detail.optString("recommendationStatus"));
@@ -166,9 +203,14 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             for(int i=0;i<group.getChildCount();i++) collect(group.getChildAt(i),type,found);
         }
     }
-    private void click(String label) {
-        for(Button b:views(Button.class)) if(label.contentEquals(b.getText())) { b.performClick(); return; }
+    private Button button(String label) {
+        for(Button b:views(Button.class)) if(label.contentEquals(b.getText())) return b;
         throw new AssertionError("Missing button "+label);
+    }
+    private void click(String label) {
+        Button button = button(label);
+        assertTrue("Disabled button " + label, button.isEnabled());
+        button.performClick();
     }
     private boolean hasText(String text) {
         AtomicReference<Boolean> found=new AtomicReference<>(false);

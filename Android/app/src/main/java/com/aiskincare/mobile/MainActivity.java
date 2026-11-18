@@ -5,35 +5,45 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
 import android.graphics.ImageDecoder;
-import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.provider.MediaStore;
 import android.text.InputType;
+import android.view.Gravity;
 import android.view.View;
+import android.view.WindowInsets;
 import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.*;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.nio.ByteBuffer;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
+
+import static com.aiskincare.mobile.AppStyle.*;
 
 public final class MainActivity extends Activity {
     private SpringClient api;
     private String server;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
-    private static final int INK = 0xff193b37, MUTED = 0xff49625d, GREEN = 0xff176554;
+    private AppStyle style;
+    private LinearLayout root;
     private LinearLayout page;
+    private ScrollView scroll;
     private String screen;
     private int version;
     private boolean rear, busy;
@@ -42,52 +52,189 @@ public final class MainActivity extends Activity {
     private boolean foreground;
     private String pendingReport;
     private CaptureDialog camera;
+    private String nickname = "", email = "";
+    private JSONObject draft = new JSONObject();
+    private final java.util.Map<String, String> draftText = new java.util.HashMap<>();
+    private String reportBack = "home";
+    private int historyPage = 1;
+    private JSONObject currentReport;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR |
+                View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+        style = new AppStyle(this);
         server = canChooseServer() ? getPreferences(MODE_PRIVATE).getString("spring",BuildConfig.SPRING_URL) : BuildConfig.SPRING_URL;
         api = new SpringClient(server);
         auth(false);
     }
-    private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
+    private int dp(int v) { return style.dp(v); }
     private void page(String id, String title) {
+        if (getCurrentFocus() instanceof EditText) {
+            getSystemService(InputMethodManager.class).hideSoftInputFromWindow(getCurrentFocus().getWindowToken(), 0);
+        }
         version++; pendingReport=null; main.removeCallbacksAndMessages(null); busy = false; screen = id;
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true); scroll.setBackgroundColor(0xfff6f8f4);
-        scroll.setOnApplyWindowInsetsListener((v, i) -> {
+        if (!"report".equals(id) && !"recommendation".equals(id)) currentReport = null;
+        root = style.column();
+        root.setBackgroundColor(WHITE);
+        root.setOnApplyWindowInsetsListener((v, i) -> {
+            int bottom = i.getSystemWindowInsetBottom();
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                bottom = Math.max(bottom, i.getInsets(WindowInsets.Type.ime()).bottom);
+            }
             v.setPadding(i.getSystemWindowInsetLeft(), i.getSystemWindowInsetTop(),
-                         i.getSystemWindowInsetRight(), i.getSystemWindowInsetBottom()); return i;
+                         i.getSystemWindowInsetRight(), bottom);
+            return i;
         });
-        page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(24), dp(28), dp(24), dp(32)); scroll.addView(page);
-        setContentView(scroll);
-        text(title, 30, true);
+        scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setVerticalScrollBarEnabled(false);
+        page = style.column();
+        page.setPadding(dp(20), dp(8), dp(20), dp(24));
+        scroll.addView(page);
+        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        setContentView(root);
+        if (title != null) label(page, title, 30, INK, 700, 6, 16);
     }
+
+    private TextView label(LinearLayout parent, String value, int size, int color, int weight, int before, int after) {
+        TextView view = style.text(value, size, color, weight);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.setMargins(0, dp(before), 0, dp(after));
+        parent.addView(view, params);
+        return view;
+    }
+
     private TextView text(String s, int size, boolean heading) {
-        TextView t = new TextView(this); t.setText(s); t.setTextSize(size);
-        t.setTextColor(heading ? INK : MUTED);
-        if (heading) t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        t.setPadding(0, dp(8), 0, dp(6)); page.addView(t); return t;
+        return label(page, s, size, heading ? INK : MUTED, heading ? 600 : 400, 5, 6);
     }
+
+    private void hero(String title, String subtitle) {
+        label(page, title, 28, INK, 700, 6, 7);
+        label(page, subtitle, 16, MUTED, 400, 0, 18);
+    }
+
+    private LinearLayout card(LinearLayout parent, boolean outline, int padding) {
+        LinearLayout card = style.column();
+        card.setBackground(style.surface(outline ? WHITE : SOFT, 24, outline));
+        card.setPadding(dp(padding), dp(padding), dp(padding), dp(padding));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.bottomMargin = dp(12);
+        parent.addView(card, lp);
+        return card;
+    }
+
+    private void separator(LinearLayout owner) {
+        View line = new View(this);
+        line.setBackgroundColor(LINE);
+        owner.addView(line, -1, dp(1));
+    }
+
+    private Button action(String title, boolean primary, Runnable action) {
+        Button b = style.button(title, 52);
+        if (primary) style.primary(b, true);
+        else style.actionSurface(b, WHITE, 28, true);
+        b.setOnClickListener(v -> { if (!busy) action.run(); });
+        return b;
+    }
+
+    private Button addAction(LinearLayout owner, String title, boolean primary, Runnable click) {
+        Button b = action(title, primary, click);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.topMargin = dp(8);
+        owner.addView(b, lp);
+        return b;
+    }
+
     private Button button(String title, boolean primary, Runnable action) {
-        Button b = new Button(this); b.setText(title); b.setAllCaps(false); b.setTextSize(16);
-        b.setMinHeight(dp(48)); b.setTextColor(primary ? Color.WHITE : INK);
-        b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(primary ? GREEN : 0xffdfebe5));
-        page.addView(b); b.setOnClickListener(v -> { if (!busy) action.run(); }); return b;
+        return addAction(page, title, primary, action);
     }
+
+    private Button footer(String title, Runnable click) {
+        LinearLayout bar = style.column();
+        separator(bar);
+        LinearLayout inset = style.column();
+        inset.setPadding(dp(20), 0, dp(20), dp(10));
+        bar.addView(inset);
+        root.addView(bar, -1, -2);
+        return addAction(inset, title, true, click);
+    }
+
+    private void toolbar(String title, Runnable back, String backLabel, Runnable close) {
+        LinearLayout row = style.row();
+        row.setMinimumHeight(dp(52));
+        root.addView(row, 0, new LinearLayout.LayoutParams(-1, -2));
+        toolbarButton(row, "‹", backLabel, back);
+        TextView name = style.text(title, 17, INK, 600);
+        name.setGravity(Gravity.CENTER);
+        row.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
+        toolbarButton(row, "×", "닫기", close);
+    }
+
+    private void toolbarButton(LinearLayout row, String mark, String name, Runnable click) {
+        if (click == null) { row.addView(new View(this), dp(52), dp(48)); return; }
+        Button button = style.button(mark, 48);
+        style.type(button, 26, INK, 400);
+        style.actionSurface(button, WHITE, 24, false);
+        button.setContentDescription(name);
+        button.setOnClickListener(v -> { if (!busy) click.run(); });
+        row.addView(button, dp(52), dp(48));
+    }
+
+    private void tabs(String selectedTab) {
+        LinearLayout bar = style.column();
+        separator(bar);
+        LinearLayout row = style.row();
+        bar.addView(row, -1, -2);
+        String[] ids = {"home", "history", "my"};
+        String[] titles = {"홈", "이력", "마이"};
+        Runnable[] callbacks = {this::home, () -> history(1), this::myPage};
+        for (int i = 0; i < ids.length; i++) {
+            boolean active = ids[i].equals(selectedTab);
+            int color = active ? INK : MUTED;
+            LinearLayout tab = style.column();
+            tab.setGravity(Gravity.CENTER);
+            tab.setContentDescription(titles[i]);
+            tab.setSelected(active);
+            tab.setFocusable(true);
+            tab.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+            style.actionSurface(tab, WHITE, 12, false);
+            tab.addView(style.glyph(ids[i], color), dp(22), dp(22));
+            TextView name = style.text(titles[i], 11, color, active ? 600 : 400);
+            name.setGravity(Gravity.CENTER);
+            name.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            name.setPadding(0, dp(4), 0, 0);
+            tab.addView(name);
+            Runnable callback = callbacks[i];
+            tab.setOnClickListener(view -> { if (!active && !busy) callback.run(); });
+            row.addView(tab, new LinearLayout.LayoutParams(0, dp(57), 1));
+        }
+        root.addView(bar);
+    }
+
     private CheckBox check(String title) {
-        CheckBox box = new CheckBox(this); box.setText(title); page.addView(box); return box;
+        CheckBox box = new CheckBox(this);
+        style.type(box, 15, INK, 400);
+        box.setText(title);
+        box.setMinHeight(dp(48));
+        page.addView(box);
+        return box;
     }
+
     private EditText field(String hint, int type) {
-        EditText e = new EditText(this); e.setHint(hint); e.setSingleLine(true); e.setInputType(type);
-        e.setSaveEnabled(false); page.addView(e); return e;
-    }
-    private Spinner choices(String title, String... labels) {
-        text(title, 16, true);
-        Spinner s = new Spinner(this); s.setContentDescription(title);
-        ArrayAdapter<String> a = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, labels);
-        s.setAdapter(a); s.setMinimumHeight(dp(48)); page.addView(s); return s;
+        EditText e = new EditText(this);
+        e.setHint(hint); e.setSingleLine(true); e.setInputType(type);
+        style.type(e, 16, INK, 400);
+        e.setHintTextColor(MUTED);
+        e.setMinHeight(dp(54));
+        e.setBackground(style.surface(FIELD, 16, false));
+        e.setPadding(dp(16), dp(12), dp(16), dp(12));
+        e.setSaveEnabled(false);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.bottomMargin = dp(8);
+        page.addView(e, lp);
+        return e;
     }
     private void notice(String message) {
         new AlertDialog.Builder(this).setMessage(message).setPositiveButton("확인", null).show();
@@ -96,19 +243,23 @@ public final class MainActivity extends Activity {
     private <T> void task(Callable<T> job, Consumer<T> result, Runnable retry) {
         if (busy) return;
         busy = true; int owner = version;
+        LinearLayout ownerPage = page;
         ProgressBar progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-        progress.setIndeterminate(true); page.addView(progress, 1);
+        progress.setIndeterminate(true);
+        progress.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(INK));
+        if (!"report".equals(screen) || retry == null)
+            ownerPage.addView(progress, 0, new LinearLayout.LayoutParams(-1, dp(4)));
         worker.submit(() -> {
             try {
                 T value = job.call();
                 main.post(() -> {
                     if (owner != version || isDestroyed()) return;
-                    busy = false; page.removeView(progress); result.accept(value);
+                    busy = false; ownerPage.removeView(progress); result.accept(value);
                 });
             } catch (Exception ex) {
                 main.post(() -> {
                     if (owner != version || isDestroyed()) return;
-                    busy = false; page.removeView(progress);
+                    busy = false; ownerPage.removeView(progress);
                     boolean expired = ex instanceof SpringClient.Failure && ((SpringClient.Failure) ex).status == 401;
                     if (expired && !"login".equals(screen)) { reset(); auth(false); }
                     String message = ex instanceof SpringClient.Failure || ex instanceof IllegalArgumentException
@@ -116,7 +267,7 @@ public final class MainActivity extends Activity {
                     if (retry != null && !expired)
                         new AlertDialog.Builder(this).setMessage(message).setPositiveButton("다시 조회", (d,w) -> retry.run())
                                 .setNegativeButton("이력으로", (d,w) -> history(1)).show();
-                    else if ("survey".equals(screen) && ex instanceof java.io.IOException && !(ex instanceof SpringClient.Failure))
+                    else if ("optional".equals(screen) && ex instanceof java.io.IOException && !(ex instanceof SpringClient.Failure))
                         new AlertDialog.Builder(this).setMessage("접수 응답을 받지 못했어요. 다시 보내기 전에 이력에서 접수 여부를 확인해 주세요.")
                                 .setPositiveButton("지난 분석 보기",(dialog,which)->history(1)).setNegativeButton("닫기",null).show();
                     else notice(message);
@@ -125,13 +276,28 @@ public final class MainActivity extends Activity {
         });
     }
     private void auth(boolean signup) {
-        page(signup ? "signup" : "login", signup ? "계정 만들기" : "스킨케어");
-        if (!signup) text("로그인하고 촬영 기록과 관리 루틴을 확인하세요.", 17, false);
-        if (!signup && !server.isEmpty()) text("연결 서버  ·  "+Uri.parse(server).getAuthority(),14,false);
-        EditText mail = field("이메일", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
-        EditText pass = field(signup ? "비밀번호 · 영문·숫자·특수문자 중 2종, 8~64자" : "비밀번호",
-                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        page(signup ? "signup" : "login", null);
         if (signup) {
+            toolbar("", () -> auth(false), "로그인으로", null);
+            hero("계정을 만들어요.", "분석 결과와 추천을 기록으로 모아 볼 수 있어요.");
+            text("이메일", 14, true);
+        } else {
+            page.addView(new View(this), new LinearLayout.LayoutParams(-1, dp(12), 1));
+            ImageView brand = style.brand(72);
+            LinearLayout.LayoutParams logo = new LinearLayout.LayoutParams(dp(72), dp(72));
+            logo.gravity = Gravity.CENTER_HORIZONTAL;
+            logo.bottomMargin = dp(23);
+            page.addView(brand, logo);
+            label(page, "피부 사진으로 시작해요.", 28, INK, 700, 0, 10).setGravity(Gravity.CENTER);
+            label(page, "사진 한 장으로 피부 이미지를 분류하고\n맞는 성분과 관리법을 추천해요.",
+                    17, MUTED, 300, 0, 34).setGravity(Gravity.CENTER);
+        }
+        EditText mail = field("이메일", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        if (signup) text("비밀번호", 14, true);
+        EditText pass = field("비밀번호", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        if (signup) {
+            label(page, "영문·숫자·특수문자 중 2종 이상, 8~64자", 12, MUTED, 400, 0, 8);
+            text("닉네임", 14, true);
             EditText nick = field("닉네임 · 2~20자", InputType.TYPE_CLASS_TEXT);
             String[] keys = {"terms","privacy","imageProcessing","over14"};
             CheckBox[] agreements = {check("서비스 이용약관 동의"), check("계정과 분석 이력의 수집·이용 동의"),
@@ -145,15 +311,207 @@ public final class MainActivity extends Activity {
                 String email = mail.getText().toString().trim(), password = pass.getText().toString(), name = nick.getText().toString().trim();
                 task(() -> { api.signup(email,password,name,consent); return true; }, ok -> { auth(false); notice("가입했어요. 로그인해 주세요."); });
             });
-            button("로그인으로", false, () -> auth(false));
         } else {
-            button("로그인", true, () -> {
+            Button login = button("로그인", true, () -> {
                 String email = mail.getText().toString().trim(), password = pass.getText().toString();
-                task(() -> { api.login(email,password); return true; }, ok -> capture());
+                task(() -> api.login(email, password), session -> {
+                    JSONObject user = session.optJSONObject("user");
+                    nickname = user == null ? "" : user.optString("nickname");
+                    this.email = email;
+                    home();
+                });
             });
-            button("계정 만들기", false, () -> auth(true));
-            if (canChooseServer()) button("서버 연결 설정",false,this::serverSettings);
+            LinearLayout links = style.row();
+            links.setGravity(Gravity.CENTER);
+            links.addView(style.text("처음이신가요?", 14, MUTED, 400));
+            Button signupLink = link("회원가입", () -> auth(true));
+            signupLink.setTextColor(INK);
+            signupLink.setPaintFlags(signupLink.getPaintFlags() | android.graphics.Paint.UNDERLINE_TEXT_FLAG);
+            links.addView(signupLink);
+            page.addView(links);
+            page.addView(new View(this), new LinearLayout.LayoutParams(-1, dp(18), 1));
+            label(page, "사진은 분석에만 쓰고 저장하지 않아요.", 12, MUTED, 400, 0, 4).setGravity(Gravity.CENTER);
+            if (canChooseServer()) {
+                Button settings = link("서버 연결 설정", this::serverSettings);
+                LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, -2);
+                p.gravity = Gravity.CENTER;
+                page.addView(settings, p);
+            }
+            android.text.TextWatcher formState = new android.text.TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+                @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                    style.primary(login, !mail.getText().toString().trim().isEmpty() && pass.length() > 0);
+                }
+                @Override public void afterTextChanged(android.text.Editable edit) {}
+            };
+            mail.addTextChangedListener(formState);
+            pass.addTextChangedListener(formState);
+            style.primary(login, false);
         }
+    }
+
+    private Button link(String title, Runnable callback) {
+        Button action = style.button(title, 48);
+        style.type(action, 14, BLUE, 600);
+        style.actionSurface(action, WHITE, 16, false);
+        action.setOnClickListener(v -> { if (!busy) callback.run(); });
+        return action;
+    }
+
+    private void home() {
+        page("home", null);
+        LinearLayout heading = style.row();
+        TextView title = style.text("홈", 30, INK, 700);
+        heading.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
+        heading.addView(style.brand(32), dp(32), dp(32));
+        page.addView(heading, -1, dp(47));
+        String date = LocalDate.now().format(DateTimeFormatter.ofPattern("M월 d일 EEEE", Locale.KOREAN));
+        label(page, date, 14, MUTED, 400, 15, 6);
+        String greeting = nickname.isEmpty() ? "오늘 피부는 어떤가요." : nickname + "님, 오늘 피부는 어떤가요.";
+        label(page, greeting, 24, INK, 700, 0, 20);
+        LinearLayout start = card(page, false, 20);
+        View symbol = style.glyph("camera", INK);
+        symbol.setPadding(dp(12), dp(12), dp(12), dp(12));
+        symbol.setBackground(style.surface(WHITE, 24, false));
+        start.addView(symbol, dp(46), dp(46));
+        label(start, "사진 한 장이면 충분해요.", 24, INK, 700, 14, 5);
+        label(start, "정면 사진과 간단한 설문으로 피부 이미지를\n분류하고 맞는 성분을 추천해요.",
+                14, MUTED, 400, 0, 12);
+        addAction(start, "피부 분석 시작", true, this::startCapture);
+
+        LinearLayout recentHeader = style.row();
+        recentHeader.addView(style.text("최근 결과", 20, INK, 700), new LinearLayout.LayoutParams(0, -2, 1));
+        recentHeader.addView(link("전체 보기", () -> history(1)));
+        page.addView(recentHeader);
+        LinearLayout recent = style.column();
+        page.addView(recent);
+        LinearLayout placeholder = card(recent, true, 17);
+        label(placeholder, "최근 분석 결과를 불러오고 있어요.", 14, MUTED, 400, 2, 2);
+        label(page, "이렇게 분석해요", 20, INK, 700, 13, 12);
+        LinearLayout guide = card(page, true, 14);
+        infoRow(guide, "camera", "사진 촬영", "정면 얼굴 사진을 준비해 주세요.");
+        separator(guide);
+        infoRow(guide, "scan", "피부 이미지 분류", "정상 포함 여섯 가지 유형의 분류 점수를 확인해요.");
+        separator(guide);
+        infoRow(guide, "list", "맞춤 성분 추천", "설문과 분석 결과를 바탕으로 관리법을 추천해요.");
+        tabs("home");
+        final int owner = version;
+        worker.submit(() -> {
+            JSONObject response;
+            try { response = api.history(1); } catch (Exception unavailable) { response = null; }
+            JSONObject result = response;
+            main.post(() -> {
+                if (owner != version || isDestroyed()) return;
+                recent.removeAllViews();
+                JSONArray entries = result == null ? null : result.optJSONArray("items");
+                JSONObject item = entries == null ? null : entries.optJSONObject(0);
+                if (item == null) {
+                    label(card(recent, true, 17), result == null ? "최근 결과는 이력에서 다시 확인해 주세요."
+                            : "아직 분석 결과가 없어요.", 14, MUTED, 400, 2, 2);
+                } else historyRow(recent, item, "home");
+            });
+        });
+    }
+
+    private void infoRow(LinearLayout owner, String icon, String title, String detail) {
+        LinearLayout row = style.row();
+        row.setPadding(0, dp(10), 0, dp(10));
+        row.addView(iconBadge(icon, SOFT, 44), dp(44), dp(44));
+        LinearLayout words = style.column();
+        words.setPadding(dp(12), 0, 0, 0);
+        label(words, title, 16, INK, 600, 0, 4);
+        label(words, detail, 13, MUTED, 400, 0, 0);
+        row.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
+        owner.addView(row, -1, -2);
+    }
+
+    private View iconBadge(String icon, int background, int size) {
+        View badge = style.glyph(icon, INK);
+        int inset = dp((size - 22) / 2);
+        badge.setPadding(inset, inset, inset, inset);
+        badge.setBackground(style.surface(background, size / 2, false));
+        return badge;
+    }
+
+    private void myPage() {
+        page("my", "마이");
+        LinearLayout profile = style.row();
+        String initial = nickname.trim().isEmpty() ? "" : nickname.substring(0, nickname.offsetByCodePoints(0, 1));
+        TextView avatar = style.text(initial, 24, WHITE, 700);
+        avatar.setGravity(Gravity.CENTER);
+        avatar.setBackground(style.surface(INK, 28, false));
+        avatar.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        profile.addView(avatar, dp(56), dp(56));
+        LinearLayout nameAndEmail = style.column();
+        nameAndEmail.setPadding(dp(13), 0, 0, 0);
+        label(nameAndEmail, initial.isEmpty() ? "내 계정" : nickname + "님", 24, INK, 700, 0, 6);
+        label(nameAndEmail, email, 14, MUTED, 400, 0, 0);
+        profile.addView(nameAndEmail, new LinearLayout.LayoutParams(0, -2, 1));
+        LinearLayout.LayoutParams profilePosition = new LinearLayout.LayoutParams(-1, -2);
+        profilePosition.bottomMargin = dp(24);
+        page.addView(profile, profilePosition);
+        LinearLayout stats = style.row();
+        card(page, false, 15).addView(stats, -1, -2);
+        TextView count = profileStat(stats, "누적 분석");
+        View divider = new View(this);
+        divider.setBackgroundColor(LINE);
+        stats.addView(divider, dp(1), dp(32));
+        TextView since = profileStat(stats, "함께한 날");
+        label(page, "설정", 20, INK, 700, 12, 3);
+        LinearLayout menu = card(page, true, 14);
+        label(menu, "개인정보 처리방침   ·   준비 중", 14, MUTED, 400, 9, 10);
+        separator(menu);
+        LinearLayout body = page;
+        page = menu;
+        CheckBox hide = check("촬영 가이드 건너뛰기");
+        hide.setChecked(getPreferences(MODE_PRIVATE).getBoolean("hideGuide", false));
+        hide.setOnCheckedChangeListener((button, checked) ->
+                getPreferences(MODE_PRIVATE).edit().putBoolean("hideGuide", checked).apply());
+        page = body;
+        separator(menu);
+        profileAction(menu, "로그아웃", INK, () -> new AlertDialog.Builder(this).setMessage("로그아웃할까요?")
+                .setNegativeButton("취소", null).setPositiveButton("로그아웃", (dialog, which) -> task(() -> {
+                    try { api.logout(); return true; } catch (Exception ex) { return false; }
+                }, ok -> { reset(); auth(false); if (!ok) notice("이 기기에서 로그아웃했어요. 서버 세션 종료는 확인하지 못했어요."); }))
+                .show());
+        separator(menu);
+        profileAction(menu, "회원 탈퇴", NEGATIVE, () -> new AlertDialog.Builder(this)
+                .setMessage("계정과 저장한 분석 이력을 모두 삭제할까요? 삭제 후 복구할 수 없어요.")
+                .setNegativeButton("취소", null).setPositiveButton("계정 삭제", (dialog, which) ->
+                    task(() -> { api.deleteAccount(); return true; }, ok -> { reset(); auth(false); })).show());
+        label(page, "스킨케어 " + BuildConfig.VERSION_NAME, 12, MUTED, 400, 0, 4).setGravity(Gravity.CENTER);
+        tabs("my");
+        int owner = version;
+        worker.submit(() -> {
+            try {
+                JSONObject account = api.me();
+                main.post(() -> {
+                    if (version != owner || isDestroyed()) return;
+                    if (account.has("analysisCount")) count.setText(account.optInt("analysisCount") + "회");
+                    String created = account.optString("createdAt");
+                    if (created.length() >= 10) since.setText(created.substring(0, 10));
+                });
+            } catch (Exception unavailable) { /* Account totals can remain unavailable. */ }
+        });
+    }
+
+    private TextView profileStat(LinearLayout row, String title) {
+        LinearLayout column = style.column();
+        TextView value = label(column, "—", 16, INK, 600, 2, 4);
+        value.setGravity(Gravity.CENTER);
+        label(column, title, 12, MUTED, 400, 0, 0).setGravity(Gravity.CENTER);
+        row.addView(column, new LinearLayout.LayoutParams(0, -2, 1));
+        return value;
+    }
+
+    private void profileAction(LinearLayout menu, String title, int color, Runnable click) {
+        Button row = style.button(title, 48);
+        style.type(row, 15, color, 500);
+        row.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        row.setPadding(0, 0, 0, 0);
+        style.actionSurface(row, WHITE, 10, false);
+        row.setOnClickListener(v -> { if (!busy) click.run(); });
+        menu.addView(row, -1, -2);
     }
     private boolean canChooseServer() { return BuildConfig.DEBUG || BuildConfig.SPRING_URL.isEmpty(); }
     private void serverSettings() {
@@ -182,30 +540,135 @@ public final class MainActivity extends Activity {
                     && u.getPort()!=0 && u.getPort()<=65535;
         } catch(java.net.URISyntaxException invalid) {return false;}
     }
-    private void capture() {
-        page("capture", "정면 사진"); text("눈높이에서 양쪽 볼이 보이도록 찍어 주세요. 필터를 끄고 밝기가 고른 곳을 선택하세요.",17,false);
-        text("사진에 보이지 않는 부위는 평가하기 어려워요.",15,false);
-        if (photo != null) {
-            ImageView iv = new ImageView(this); iv.setImageBitmap(photo.preview);
-            iv.setContentDescription("전송할 정면 사진"); iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            page.addView(iv, -1, dp(200)); button("이 사진으로 설문 작성", true, this::survey);
-        }
-        button("셀프 촬영 · 전면 카메라", photo == null, () -> camera(false));
-        button("다른 사람이 촬영 · 후면 카메라", false, () -> camera(true));
-        button("앨범에서 선택", false, () -> {
-            Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE);
-            startActivityForResult(pick, 20);
-        });
-        button("지난 분석 보기", false, () -> history(1));
-        button("로그아웃", false, () -> task(() -> {
-            try { api.logout(); return true; } catch (Exception ex) { return false; }
-        }, ok -> { reset(); auth(false); if (!ok) notice("이 기기에서 로그아웃했어요. 서버 세션 종료는 확인하지 못했어요."); }));
-        button("회원 탈퇴", false, () -> new AlertDialog.Builder(this)
-                .setMessage("계정과 저장한 분석 이력을 모두 삭제할까요? 삭제 후 복구할 수 없어요.")
-                .setNegativeButton("취소",null).setPositiveButton("계정 삭제",(dialog,which) ->
-                    task(() -> { api.deleteAccount(); return true; }, ok -> { reset(); auth(false); })).show());
+    private void startCapture() {
+        clearCapture();
+        rear = false;
+        if (getPreferences(MODE_PRIVATE).getBoolean("hideGuide", false)) capture();
+        else guide();
     }
-    private void reset() { photo = null; }
+
+    private void closeCapture() { clearCapture(); home(); }
+
+    private void guide() {
+        page("guide", null);
+        toolbar("", null, "", this::closeCapture);
+        hero("이렇게 찍어 주세요.", "정확한 분석을 위한 네 가지예요.");
+        LinearLayout rules = card(page, true, 14);
+        infoRow(rules, "scan", "정면을 봐 주세요", "얼굴 전체가 화면 가운데에 오도록 찍어요.");
+        separator(rules);
+        infoRow(rules, "sun", "자연광에서 찍어 주세요", "그늘이나 역광을 피하고 밝은 곳에서 찍어요.");
+        separator(rules);
+        infoRow(rules, "glasses", "화장과 안경은 벗어 주세요", "맨얼굴일 때 더 정확하게 분석돼요.");
+        separator(rules);
+        infoRow(rules, "comb", "앞머리를 넘겨 주세요", "이마가 가려지지 않게 정리해요.");
+        CheckBox hide = check("다음부터 보지 않기");
+        footer("촬영 화면으로", () -> {
+            getPreferences(MODE_PRIVATE).edit().putBoolean("hideGuide", hide.isChecked()).apply();
+            capture();
+        });
+    }
+
+    private void stepIndicator(boolean survey) {
+        LinearLayout steps = style.row();
+        steps.setContentDescription(survey ? "2단계 중 2단계, 설문" : "2단계 중 1단계, 촬영");
+        for (int i = 0; i < 2; i++) {
+            View bar = new View(this);
+            bar.setBackground(style.surface(i == 0 || survey ? INK : SOFT, 4, false));
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(4), 1);
+            if (i == 0) p.rightMargin = dp(8);
+            steps.addView(bar, p);
+        }
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, dp(4));
+        p.bottomMargin = dp(14);
+        page.addView(steps, p);
+    }
+
+    private void capture() {
+        page("capture", null);
+        boolean showGuide = !getPreferences(MODE_PRIVATE).getBoolean("hideGuide", false);
+        toolbar("", showGuide ? this::guide : null, "촬영 가이드", this::closeCapture);
+        stepIndicator(false);
+        hero("얼굴 사진을 준비해 주세요.", photo == null
+                ? "정면 얼굴이 잘 보이는 사진 한 장이면 돼요." : "이 사진으로 분석할게요.");
+
+        FrameLayout preview = new FrameLayout(this) {
+            @Override protected void onMeasure(int width, int height) {
+                int h = Math.min(dp(480), Math.round(View.MeasureSpec.getSize(width) * 1.25f));
+                super.onMeasure(width, View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY));
+            }
+        };
+        preview.setBackground(style.surface(SOFT, 16, false));
+        preview.setClipToOutline(true);
+        if (photo == null) preview.addView(style.faceGuide(), -1, -1);
+        else {
+            ImageView picture = new ImageView(this);
+            picture.setImageBitmap(photo.preview);
+            picture.setContentDescription("선택한 얼굴 사진 미리보기");
+            picture.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            preview.addView(picture, -1, -1);
+        }
+        page.addView(preview, -1, -2);
+        segment(page, "셀프 촬영", "다른 사람이 촬영", rear, value -> rear = value);
+        label(page, "눈높이에서 양쪽 볼이 보이게 정면을 찍어 주세요. 사진에 보이지 않는 부위는 평가하기 어려워요.",
+                14, MUTED, 400, 1, 12);
+        LinearLayout sources = style.row();
+        pair(sources, action(photo == null ? "촬영하기" : "다시 찍기", false, () -> camera(rear)),
+                action(photo == null ? "앨범에서 선택" : "다른 사진", false, this::pickPhoto), 8);
+        page.addView(sources);
+        style.primary(footer("다음", this::survey), photo != null);
+    }
+
+    private void pickPhoto() {
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            try {
+                startActivityForResult(new Intent(MediaStore.ACTION_PICK_IMAGES).setType("image/*"), 20);
+                return;
+            } catch (android.content.ActivityNotFoundException unavailable) {
+                // Android builds without the system photo picker can still select a document.
+            }
+        }
+        Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE);
+        startActivityForResult(pick, 20);
+    }
+
+    private void pair(LinearLayout row, View left, View right, int gap) {
+        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(0, -2, 1);
+        l.rightMargin = dp(gap);
+        row.addView(left, l);
+        row.addView(right, new LinearLayout.LayoutParams(0, -2, 1));
+    }
+
+    private void segment(LinearLayout owner, String first, String second, boolean right, Consumer<Boolean> onChange) {
+        LinearLayout row = style.row();
+        row.setPadding(dp(3), dp(3), dp(3), dp(3));
+        row.setBackground(style.surface(FIELD, 12, false));
+        LinearLayout.LayoutParams placement = new LinearLayout.LayoutParams(-1, -2);
+        placement.setMargins(0, dp(12), 0, dp(8));
+        owner.addView(row, placement);
+        Button left = style.button(first, 44), rightButton = style.button(second, 44);
+        Consumer<Boolean> update = selected -> {
+            switchTab(left, !selected);
+            switchTab(rightButton, selected);
+        };
+        pair(row, left, rightButton, 3);
+        update.accept(right);
+        left.setOnClickListener(v -> { if (!busy) { update.accept(false); onChange.accept(false); } });
+        rightButton.setOnClickListener(v -> { if (!busy) { update.accept(true); onChange.accept(true); } });
+    }
+
+    private void switchTab(Button button, boolean selected) {
+        style.type(button, 14, INK, selected ? 600 : 400);
+        style.actionSurface(button, selected ? WHITE : FIELD, 10, false);
+        button.setSelected(selected);
+    }
+
+    private void clearCapture() {
+        photo = null;
+        draft = new JSONObject();
+        draftText.clear();
+    }
+
+    private void reset() { clearCapture(); nickname = ""; email = ""; }
     private void camera(boolean rearLens) {
         rear = rearLens;
         if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
@@ -236,117 +699,260 @@ public final class MainActivity extends Activity {
     private static void put(JSONObject o, String key, Object value) {
         try { o.put(key, value); } catch (org.json.JSONException e) { throw new IllegalArgumentException(key, e); }
     }
-    private static void selected(JSONObject o, String key, Spinner s, Object... values) {
-        int i = s.getSelectedItemPosition() - 1;
-        if (i >= 0) put(o,key,values[i]);
+    private void question(String title, boolean required) {
+        LinearLayout row = style.row();
+        row.addView(style.text(title, 16, INK, 600), new LinearLayout.LayoutParams(0, -2, 1));
+        if (required) row.addView(style.text("필수", 12, MUTED, 500));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, dp(11), 0, dp(8));
+        page.addView(row, lp);
     }
-    private List<CheckBox> multi(String title, String... names) {
-        text(title,16,true); List<CheckBox> boxes = new ArrayList<>();
-        for (String name : names) boxes.add(check(name)); return boxes;
+
+    private Button chip(String title) {
+        Button chip = style.button(title, 44);
+        chip.setPadding(dp(4), dp(6), dp(4), dp(6));
+        return chip;
     }
-    private LinearLayout optionalFields(String title) {
-        LinearLayout parent=page;
-        LinearLayout fields=new LinearLayout(this); fields.setOrientation(LinearLayout.VERTICAL);
-        Button toggle=button(title+" 열기",false,()->{});
-        toggle.setOnClickListener(v->{
-            boolean open=fields.getVisibility()!=View.VISIBLE;
-            fields.setVisibility(open ? View.VISIBLE : View.GONE);
-            toggle.setText(title+(open?" 닫기":" 열기"));
-        });
-        fields.setVisibility(View.GONE); parent.addView(fields); page=fields;
-        return parent;
+
+    private void selectChip(Button chip, boolean selected) {
+        style.type(chip, 14, selected ? WHITE : INK, selected ? 600 : 400);
+        style.actionSurface(chip, selected ? INK : WHITE, 24, !selected);
+        chip.setSelected(selected);
     }
-    private static JSONArray checked(List<CheckBox> boxes, String... codes) {
-        JSONArray values = new JSONArray();
-        for (int i=0;i<boxes.size();i++) if (boxes.get(i).isChecked()) values.put(codes[i]); return values;
+
+    private void placeChips(List<Button> chips, int columns) {
+        for (int i = 0; i < chips.size(); i += columns) {
+            LinearLayout row = style.row();
+            for (int j = 0; j < columns; j++) {
+                boolean hasChip = i + j < chips.size();
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, hasChip ? -2 : 0, 1);
+                if (j < columns - 1) lp.rightMargin = dp(7);
+                row.addView(hasChip ? chips.get(i + j) : new View(this), lp);
+            }
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+            lp.bottomMargin = dp(8);
+            page.addView(row, lp);
+        }
     }
+
+    private void choices(JSONObject target, String key, String title, boolean required, int columns,
+                         String[] labels, Object[] values, Runnable changed) {
+        question(title, required);
+        List<Button> chips = new ArrayList<>();
+        for (int i = 0; i < labels.length; i++) {
+            Button chip = chip(labels[i]);
+            Object value = values[i];
+            selectChip(chip, java.util.Objects.equals(target.opt(key), value));
+            chips.add(chip);
+            chip.setOnClickListener(view -> {
+                if (busy) return;
+                if (value == null || (!required && chip.isSelected())) target.remove(key);
+                else put(target, key, value);
+                for (int j = 0; j < chips.size(); j++)
+                    selectChip(chips.get(j), java.util.Objects.equals(target.opt(key), values[j]));
+                if (changed != null) changed.run();
+            });
+        }
+        placeChips(chips, columns);
+    }
+
+    private void multi(JSONObject target, String key, String title, String note, int columns, int limit,
+                       String[] labels, String[] codes) {
+        question(title, false);
+        if (note != null) label(page, note, 13, MUTED, 400, 0, 8);
+        List<Button> chips = new ArrayList<>();
+        JSONArray saved = target.optJSONArray(key);
+        for (int i = 0; i < labels.length; i++) {
+            Button chip = chip(labels[i]);
+            for (int j = 0; saved != null && j < saved.length(); j++) {
+                if (codes[i].equals(saved.optString(j))) { chip.setSelected(true); break; }
+            }
+            selectChip(chip, chip.isSelected());
+            chips.add(chip);
+            chip.setOnClickListener(view -> {
+                if (busy) return;
+                boolean wasSelected = chip.isSelected();
+                JSONArray selection = new JSONArray();
+                for (int j = 0; j < chips.size(); j++) {
+                    Button candidate = chips.get(j);
+                    if (candidate == chip ? !wasSelected : candidate.isSelected()) selection.put(codes[j]);
+                }
+                if (selection.length() > limit) { notice("고민은 최대 3개까지 선택할 수 있어요."); return; }
+                selectChip(chip, !wasSelected);
+                if (selection.length() == 0) target.remove(key);
+                else put(target, key, selection);
+            });
+        }
+        placeChips(chips, columns);
+    }
+
     private void survey() {
-        page("survey", "오늘의 설문");
-        Spinner gender = choices("성별 · 필수","선택해 주세요","여성","남성");
-        Spinner age = choices("연령대 · 필수","선택해 주세요","10대","20대","30대","40대","50대","60대","70대");
-        Spinner skin = choices("피부 타입","미응답","건성","중성","지성","복합성");
-        List<CheckBox> concerns = multi("관리하고 싶은 고민 · 최대 3개","피부 톤·잡티","모공","주름","트러블","붉은기","건조·각질","탄력","민감함");
-        EditText avoid = field("피하고 싶은 성분 · 쉼표로 구분",InputType.TYPE_CLASS_TEXT);
-        LinearLayout form=optionalFields("최근 피부 상태");
-        text("이번 촬영의 자가 응답으로 기록해요. 현재 이미지 분류에는 사진만 사용해요.",15,false);
-        Spinner itch = choices("가려움","미응답","없음","가끔","자주");
-        Spinner flake = choices("각질","미응답","없음","건조함","기름짐","둘 다");
-        Spinner red = choices("반복되는 붉은기","미응답","아니요","예");
-        Spinner plugs = choices("눈에 보이는 면포","미응답","아니요","예");
-        Spinner onset = choices("처음 알아차린 시점","미응답","1주 미만","1~4주","4주 넘음");
-        List<CheckBox> areas = multi("신경 쓰이는 부위","이마","머리카락 경계·두피","눈썹 주변","코 주변","볼","턱");
-        page=form;
-        optionalFields("생활 습관과 사용 제품");
-        EditText hours=field("평균 수면 시간 · 0~14시간",InputType.TYPE_CLASS_NUMBER);
-        Spinner water=choices("물 섭취량","미응답","적음","보통","많음");
-        Spinner sun=choices("햇빛 노출","미응답","적음","보통","많음");
-        Spinner stress=choices("스트레스","미응답","낮음","보통","높음");
-        EditText products=field("사용 제품 · 최대 5개, 쉼표로 구분",InputType.TYPE_CLASS_TEXT);
-        EditText note=field("추가로 전할 내용 · 300자 이내",InputType.TYPE_CLASS_TEXT);
-        page=form;
-        button("사진과 설문 제출", true, () -> {
-            JSONObject answer = new JSONObject(), symptoms = new JSONObject();
-            selected(answer,"gender",gender,"female","male");
-            selected(answer,"ageBand",age,"10s","20s","30s","40s","50s","60s","70s");
-            if (!answer.has("gender") || !answer.has("ageBand")) { notice("성별과 연령대를 선택해 주세요."); return; }
-            selected(answer,"skinType",skin,"dry","normal","oily","combination");
-            JSONArray goals = checked(concerns,"pigmentation","pore","wrinkle","acne","redness","dryness","sagging","sensitivity");
-            if (goals.length()>3) { notice("고민은 최대 3개까지 선택할 수 있어요."); return; }
-            if (goals.length()>0) put(answer,"concerns",goals);
-            JSONArray exclusions = new JSONArray();
-            for (String part : avoid.getText().toString().split(",")) {
-                String name=part.trim(); if (name.isEmpty()) continue;
-                if (name.length()>100 || exclusions.length()>=30) { notice("회피 성분은 30개까지, 이름은 100자 이내로 입력해 주세요."); return; }
-                exclusions.put(name);
+        page("survey", null);
+        toolbar("", this::capture, "사진으로 돌아가기", this::closeCapture);
+        stepIndicator(true);
+        hero("기본 정보를 알려 주세요.", "추천 성분을 고르는 데 쓰여요.");
+        Button next = footer("다음", this::optionalSurvey);
+        Runnable update = () -> style.primary(next, draft.has("gender") && draft.has("ageBand"));
+        choices(draft, "gender", "성별", true, 2, new String[]{"여성", "남성"},
+                new Object[]{"female", "male"}, update);
+        choices(draft, "ageBand", "연령대", true, 4, new String[]{"10대","20대","30대","40대","50대","60대","70대"},
+                new Object[]{"10s","20s","30s","40s","50s","60s","70s"}, update);
+        choices(draft, "skinType", "피부 타입", false, 3, new String[]{"건성","중성","지성","복합성","잘 모르겠어요"},
+                new Object[]{"dry","normal","oily","combination",null}, update);
+        update.run();
+    }
+
+    private EditText draftField(String key, String title, String hint, int type) {
+        question(title, false);
+        EditText field = field(hint, type);
+        field.setText(draftText.getOrDefault(key, ""));
+        field.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                draftText.put(key, s.toString());
             }
-            if (exclusions.length()>0) put(answer,"avoidIngredients",exclusions);
-            selected(symptoms,"itch",itch,"none","occasional","frequent");
-            selected(symptoms,"flaking",flake,"none","dry","greasy","both");
-            selected(symptoms,"recurringRedness",red,false,true);
-            selected(symptoms,"visiblePlugs",plugs,false,true);
-            selected(symptoms,"onset",onset,"under_one_week","one_to_four_weeks","over_four_weeks");
-            JSONArray sites = checked(areas,"forehead","hairline_scalp","eyebrows","around_nose","cheeks","jaw_chin");
-            if (sites.length()>0) put(symptoms,"areas",sites);
-            if (symptoms.length()>0) put(answer,"symptomProfile",symptoms);
-            selected(answer,"waterIntakeLevel",water,"low","medium","high");
-            selected(answer,"sunExposureLevel",sun,"low","medium","high");
-            selected(answer,"stressLevel",stress,"low","medium","high");
-            String sleep=hours.getText().toString().trim();
-            if(!sleep.isEmpty()) {
-                if(!sleep.matches("[0-9]{1,2}") || Integer.parseInt(sleep)>14) {notice("수면 시간은 0~14시간으로 입력해 주세요.");return;}
-                put(answer,"sleepHours",Integer.parseInt(sleep));
-            }
-            JSONArray used=new JSONArray();
-            for(String item:products.getText().toString().split(",")) {
-                String product=item.trim(); if(product.isEmpty()) continue;
-                if(product.length()>30 || used.length()>=5) {notice("제품은 5개까지, 이름은 30자 이내로 입력해 주세요.");return;}
-                used.put(product);
-            }
-            if(used.length()>0) put(answer,"currentProducts",used);
-            String extra=note.getText().toString().trim();
-            if(extra.length()>300) {notice("추가 내용은 300자 이내로 입력해 주세요.");return;}
-            if(!extra.isEmpty()) put(answer,"note",extra);
-            byte[] jpeg = photo.jpeg;
-            task(() -> api.submit(jpeg,answer), report -> { photo=null; openReport(report); });
+            @Override public void afterTextChanged(android.text.Editable edit) {}
         });
-        button("사진으로 돌아가기",false,this::capture);
+        return field;
+    }
+
+    private void optionalSurvey() {
+        page("optional", null);
+        toolbar("", this::survey, "이전 단계", this::closeCapture);
+        stepIndicator(true);
+        hero("피부 상태와 생활 습관", "모두 선택 사항이에요. 답하지 않아도 분석할 수 있어요.");
+        label(page, "최근 피부 상태", 20, INK, 700, 2, 3);
+        label(page, "이번 촬영의 자가 응답으로 기록해요. 현재 이미지 분류에는 사진만 사용해요.",
+                14, MUTED, 400, 0, 9);
+        JSONObject symptoms = draft.optJSONObject("symptomProfile");
+        if (symptoms == null) {
+            symptoms = new JSONObject();
+            put(draft, "symptomProfile", symptoms);
+        }
+        choices(symptoms, "itch", "가려움", false, 3, new String[]{"없음","가끔","자주"},
+                new Object[]{"none","occasional","frequent"}, null);
+        choices(symptoms, "flaking", "각질", false, 4, new String[]{"없음","건조함","기름짐","둘 다"},
+                new Object[]{"none","dry","greasy","both"}, null);
+        choices(symptoms, "recurringRedness", "반복되는 붉은기", false, 2, new String[]{"아니요","예"},
+                new Object[]{false,true}, null);
+        choices(symptoms, "visiblePlugs", "눈에 보이는 면포", false, 2, new String[]{"아니요","예"},
+                new Object[]{false,true}, null);
+        choices(symptoms, "onset", "처음 알아차린 시점", false, 3, new String[]{"1주 미만","1~4주","4주 넘음"},
+                new Object[]{"under_one_week","one_to_four_weeks","over_four_weeks"}, null);
+        multi(symptoms, "areas", "신경 쓰이는 부위", null, 3, 6,
+                new String[]{"이마","머리카락 경계·두피","눈썹 주변","코 주변","볼","턱"},
+                new String[]{"forehead","hairline_scalp","eyebrows","around_nose","cheeks","jaw_chin"});
+        label(page, "생활 습관", 20, INK, 700, 13, 3);
+        EditText hours = draftField("sleep", "하루 수면 시간", "0~14시간", InputType.TYPE_CLASS_NUMBER);
+        Object[] levels = {"low","medium","high"};
+        choices(draft, "waterIntakeLevel", "물 섭취량", false, 3, new String[]{"적음","보통","많음"}, levels, null);
+        choices(draft, "sunExposureLevel", "햇빛 노출", false, 3, new String[]{"낮음","보통","높음"}, levels, null);
+        choices(draft, "stressLevel", "스트레스", false, 3, new String[]{"낮음","보통","높음"}, levels, null);
+        multi(draft, "concerns", "피부 고민", "최대 3개 · 정상으로 분류되면 여기서 고른 고민을 바탕으로 추천해요.", 3, 3,
+                new String[]{"피부 톤·잡티","모공","주름","트러블","붉은기","건조·각질","탄력","민감함"},
+                new String[]{"pigmentation","pore","wrinkle","acne","redness","dryness","sagging","sensitivity"});
+        EditText avoid = draftField("avoid", "피하고 싶은 성분", "쉼표로 구분", InputType.TYPE_CLASS_TEXT);
+        EditText products = draftField("products", "사용 중인 제품", "최대 5개 · 쉼표로 구분", InputType.TYPE_CLASS_TEXT);
+        EditText note = draftField("note", "추가로 알려 주실 내용", "예: 여름에 번들거림이 심해요", InputType.TYPE_CLASS_TEXT);
+        footer("분석 시작", () -> submit(avoid, hours, products, note));
+    }
+
+    private JSONArray commaSeparated(EditText input, int count, int length, String error) {
+        JSONArray result = new JSONArray();
+        for (String part : input.getText().toString().split(",")) {
+            String item = part.trim();
+            if (item.isEmpty()) continue;
+            if (item.length() > length || result.length() >= count) throw new IllegalArgumentException(error);
+            result.put(item);
+        }
+        return result;
+    }
+
+    private void submit(EditText avoid, EditText hours, EditText products, EditText note) {
+        if (photo == null || !draft.has("gender") || !draft.has("ageBand")) return;
+        JSONObject answer;
+        try {
+            answer = new JSONObject(draft.toString());
+            JSONObject symptoms = answer.optJSONObject("symptomProfile");
+            if (symptoms != null && symptoms.length() == 0) answer.remove("symptomProfile");
+            JSONArray exclusions = commaSeparated(avoid, 30, 100, "회피 성분은 30개까지, 이름은 100자 이내로 입력해 주세요.");
+            if (exclusions.length() > 0) put(answer, "avoidIngredients", exclusions);
+            String sleep = hours.getText().toString().trim();
+            if (!sleep.isEmpty()) {
+                if (!sleep.matches("[0-9]{1,2}") || Integer.parseInt(sleep) > 14)
+                    throw new IllegalArgumentException("수면 시간은 0~14시간으로 입력해 주세요.");
+                put(answer, "sleepHours", Integer.parseInt(sleep));
+            }
+            JSONArray used = commaSeparated(products, 5, 30, "제품은 5개까지, 이름은 30자 이내로 입력해 주세요.");
+            if (used.length() > 0) put(answer, "currentProducts", used);
+            String extra = note.getText().toString().trim();
+            if (extra.length() > 300) throw new IllegalArgumentException("추가 내용은 300자 이내로 입력해 주세요.");
+            if (!extra.isEmpty()) put(answer, "note", extra);
+        } catch (IllegalArgumentException | org.json.JSONException invalid) {
+            notice(invalid.getMessage());
+            return;
+        }
+        byte[] jpeg = photo.jpeg;
+        task(() -> api.submit(jpeg, answer), result -> {
+            clearCapture();
+            reportBack = "home";
+            openReport(result);
+        });
     }
     private void history(int index) {
-        page("history","지난 분석"); button("사진 촬영으로",false,this::capture);
+        historyPage = index;
+        page("history", "이력");
+        tabs("history");
         task(() -> api.history(index), list -> {
             JSONArray rows = list.optJSONArray("items");
-            if (rows == null || rows.length()==0) text("아직 분석 기록이 없어요.",17,false);
-            else for (int i=0;i<rows.length();i++) {
-                JSONObject row=rows.optJSONObject(i); if (row==null) continue;
-                String id=row.optString("analysisId"), date=row.optString("createdAt").split("T")[0];
-                JSONObject disease=row.optJSONObject("disease");
-                button(date+"   "+(disease==null?"":disease.optString("label"))+"   "+stateName(row.optString("status")),
-                        false,()->task(()->api.detail(id),this::openReport));
+            if (rows == null || rows.length() == 0) {
+                LinearLayout empty = card(page, true, 20);
+                label(empty, "아직 분석 기록이 없어요.", 17, INK, 600, 2, 6);
+                label(empty, "피부 분석을 시작하면 결과를 여기서 다시 볼 수 있어요.", 14, MUTED, 400, 0, 8);
+                addAction(empty, "피부 분석 시작", true, this::startCapture);
+            } else {
+                String previous = "";
+                for (int i = 0; i < rows.length(); i++) {
+                    JSONObject item = rows.optJSONObject(i);
+                    if (item == null) continue;
+                    String date = item.optString("createdAt");
+                    String month = date.length() >= 7 ? date.substring(0, 4) + "년 " + date.substring(5, 7) + "월" : "";
+                    if (!month.equals(previous)) label(page, month, 16, INK, 600, 9, 10);
+                    previous = month;
+                    historyRow(page, item, "history");
+                }
             }
             if (index>1) button("이전 페이지",false,()->history(index-1));
             JSONObject bounds=list.optJSONObject("page");
             if (bounds!=null && index<bounds.optInt("totalPages")) button("다음 페이지",false,()->history(index+1));
         }, ()->history(index));
+    }
+
+    private void historyRow(LinearLayout owner, JSONObject item, String back) {
+        LinearLayout container = card(owner, true, 0);
+        LinearLayout row = style.row();
+        row.setPadding(dp(14), dp(14), dp(14), dp(14));
+        row.addView(iconBadge("scan", SOFT, 44), dp(44), dp(44));
+        LinearLayout words = style.column();
+        words.setPadding(dp(12), 0, dp(12), 0);
+        String date = item.optString("createdAt").split("T")[0];
+        JSONObject disease = item.optJSONObject("disease");
+        String title = disease == null ? "피부 분석" : disease.optString("label", "피부 분석");
+        label(words, date, 12, MUTED, 400, 0, 4);
+        label(words, title, 17, INK, 600, 0, 3);
+        label(words, stateName(item.optString("status")), 13, MUTED, 500, 0, 0);
+        row.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
+        row.addView(style.text("›", 24, MUTED, 400));
+        row.setContentDescription(date + " " + title + " " + stateName(item.optString("status")));
+        row.setFocusable(true);
+        style.actionSurface(row, WHITE, 24, true);
+        row.setOnClickListener(v -> {
+            if (!busy) task(() -> api.detail(item.optString("analysisId")), detail -> {
+                reportBack = back;
+                openReport(detail);
+            });
+        });
+        container.addView(row);
     }
     private static String stateName(String status) {
         switch(status) {
@@ -362,69 +968,260 @@ public final class MainActivity extends Activity {
                 && r.optJSONObject("recommendation")!=null && (meta==null || !("not_generated".equals(meta.optString("origin"))
                 || "withheld".equals(meta.optString("qualityStatus")) || "withheld".equals(meta.optString("evidenceStatus"))));
     }
-    private void lines(JSONArray values) {
-        if (values!=null) for(int i=0;i<values.length();i++) text(values.optString(i),16,false);
+    private void lines(LinearLayout owner, JSONArray values) {
+        for (int i = 0; values != null && i < values.length(); i++)
+            label(owner, values.optString(i), 15, MUTED, 400, 3, 4);
     }
+
+    private void backFromReport() {
+        if ("history".equals(reportBack)) history(historyPage);
+        else home();
+    }
+
     private void report(JSONObject value) {
-        page("report","분석 결과");
-        JSONObject d=value.optJSONObject("disease");
-        if (d!=null) {
-            text(d.optString("label")+"   ·   모델 분류 점수 "+Math.round(d.optDouble("confidence",0)*100)+"%",21,true);
-            text("이미지 분류 참고 결과이며 의학적 진단이 아닙니다.",15,false);
-            if (d.optBoolean("uncertain")) text("분류 점수가 낮아 결과가 불확실해요.",16,false);
-            android.graphics.Bitmap map = heatmap(d);
+        page("report", null);
+        currentReport = value;
+        toolbar("분석 결과", this::backFromReport, "돌아가기", null);
+        JSONObject disease = value.optJSONObject("disease");
+        if (disease != null) {
+            LinearLayout result = card(page, false, 22);
+            LinearLayout caption = style.row();
+            TextView mode = style.text("이미지 분류 참고 결과", 14, MUTED, 500);
+            caption.addView(mode, new LinearLayout.LayoutParams(0, -2, 1));
+            String timestamp = value.optString("createdAt");
+            if (!timestamp.isEmpty()) {
+                try {
+                    timestamp = OffsetDateTime.parse(timestamp).atZoneSameInstant(java.time.ZoneId.systemDefault())
+                            .format(DateTimeFormatter.ofPattern("M월 d일 HH:mm", Locale.KOREAN));
+                    caption.addView(style.text(timestamp, 12, MUTED, 400));
+                } catch (java.time.format.DateTimeParseException ignored) {
+                    // Some older records have no parseable server timestamp.
+                }
+            }
+            result.addView(caption);
+            label(result, disease.optString("label"), 44, INK, 700, 0, 14);
+            label(result, "모델 분류 점수", 13, MUTED, 500, 0, 3);
+            double score = disease.optDouble("confidence", 0);
+            label(result, percent(score), 24, INK, 700, 0, 8);
+            if (disease.optBoolean("uncertain"))
+                label(result, "판단 보류 · 분류 점수가 낮아 결과가 불확실해요.", 14, MUTED, 500, 10, 0);
+            JSONObject scores = disease.optJSONObject("probabilities");
+            if (scores != null && scores.length() > 0) {
+                LinearLayout breakdown = disclosure(page, "6종 모델 분류 점수");
+                label(breakdown, "질환 확률이 아니에요.", 13, MUTED, 400, 4, 7);
+                List<String> labels = new ArrayList<>(java.util.Arrays.asList("건선", "아토피", "여드름", "정상", "주사", "지루"));
+                scores.keys().forEachRemaining(key -> { if (!labels.contains(key)) labels.add(key); });
+                for (String key : labels) {
+                    if (!scores.has(key)) continue;
+                    double amount = scores.optDouble(key, 0);
+                    label(breakdown, key + "   " + percent(amount), 14, INK, 500, 8, 6);
+                    meter(breakdown, amount);
+                }
+            }
+            label(page, "이미지 분류 참고 결과이며 의학적 진단이 아닙니다.", 13, MUTED, 400, 5, 13);
+            android.graphics.Bitmap map = heatmap(disease);
             if (map != null) {
-                ImageView image = new ImageView(this); image.setImageBitmap(map);
-                image.setContentDescription("분류기가 참고한 영역"); page.addView(image, -1, dp(144));
-                text("밝은 부분은 분류기가 더 많이 참고한 영역이에요. 병변의 경계를 표시한 그림은 아니에요.",14,false);
+                label(page, "분류기가 참고한 영역", 20, INK, 700, 4, 9);
+                LinearLayout explanation = card(page, true, 16);
+                ImageView image = new ImageView(this);
+                image.setImageBitmap(map);
+                image.setContentDescription("분류기가 참고한 영역");
+                explanation.addView(image, -1, dp(144));
+                label(explanation, "밝은 부분은 분류기가 더 많이 참고한 영역이에요. 병변의 경계를 표시한 그림은 아니에요.",
+                        14, MUTED, 400, 9, 0);
             }
         }
-        String status=value.optString("status"), id=value.optString("analysisId");
-        text(stateName(status),19,true); lines(value.optJSONArray("guidance"));
+        lines(page, value.optJSONArray("guidance"));
+        String status = value.optString("status"), id = value.optString("analysisId");
+        label(page, "맞춤 추천", 20, INK, 700, 13, 10);
+        LinearLayout update = card(page, false, 18);
+        label(update, stateName(status), 14, INK, 600, 0, 8);
         if (showRecommendation(value)) {
-            JSONObject rec=value.optJSONObject("recommendation"), meta=value.optJSONObject("generation");
-            if (meta!=null) {
-                String origin=meta.optString("origin");
-                if ("source_cards".equals(origin)) text("근거 카드로 구성한 안내",15,false);
-                if ("rule_fallback".equals(origin)) text("기본 관리 규칙으로 구성한 안내",15,false);
+            JSONObject recommendation = value.optJSONObject("recommendation");
+            String source = sourceNotice(value);
+            if (!source.isEmpty()) label(update, source, 13, MUTED, 500, 0, 7);
+            JSONArray ingredients = recommendation.optJSONArray("ingredients");
+            if (ingredients != null && ingredients.length() > 0) {
+                label(update, "추천 성분", 13, MUTED, 500, 0, 5);
+                for (int i = 0; i < ingredients.length(); i++) {
+                    JSONObject item = ingredients.optJSONObject(i);
+                    if (item != null) numberedRow(update, i + 1, item.optString("name"), "", WHITE);
+                }
+            } else {
+                label(update, "맞춤 성분을 찾지 못했어요. 추천 이유를 확인해 주세요.", 14, MUTED, 400, 1, 5);
             }
-            if (!rec.isNull("answer")) text(rec.optString("answer"),16,false);
-            JSONArray ingredients=rec.optJSONArray("ingredients");
-            if (ingredients!=null && ingredients.length()>0) text("추천 성분",21,true);
-            if (ingredients!=null) for(int i=0;i<ingredients.length();i++) {
-                JSONObject item=ingredients.optJSONObject(i); if(item!=null) text(item.optString("name")+
-                        (item.isNull("purpose") ? "" : "  ·  "+item.optString("purpose")),16,false);
-            }
-            JSONArray steps=rec.optJSONArray("routine");
-            if(steps!=null && steps.length()>0) text("관리 루틴",21,true);
-            if(steps!=null) for(int i=0;i<steps.length();i++){
-                JSONObject s=steps.optJSONObject(i);
-                if(s!=null) text(timeLabel(s.optString("time"))+"   "+s.optString("action"),16,false);
-            }
-            if(!rec.isNull("disclaimer")) text(rec.optString("disclaimer"),14,false);
+            addAction(update, "추천 자세히 보기", true, () -> recommendation(value, false));
         } else if ("WITHHELD".equals(status) || "COMPLETED".equals(status)) {
-            String reason=value.optString("recommendationStatus");
-            String message="이번 분석에서는 성분 추천을 제공하지 않아요.";
-            if ("uncertain".equals(reason)) message="사진 분류가 불확실해 추천을 보류했어요.";
-            if ("no_concern".equals(reason)) message="정상으로 분류됐고 선택한 고민이 없어 추천을 생략했어요.";
-            if ("quality_rejected".equals(reason)) message="추천이 근거·품질 기준을 충족하지 않아 보류했어요.";
-            text(message,16,false);
+            String reason = value.optString("recommendationStatus");
+            String message = switch (reason) {
+                case "uncertain" -> "사진 분류가 불확실해 추천을 보류했어요.";
+                case "no_concern" -> "정상으로 분류됐고 선택한 고민이 없어 추천을 생략했어요.";
+                case "quality_rejected", "not_generated" -> "추천이 근거·품질 기준을 충족하지 않아 보류했어요.";
+                default -> "이번 분석에서는 성분 추천을 제공하지 않아요.";
+            };
+            label(update, message, 16, MUTED, 400, 0, 4);
         } else if ("FAILED".equals(status)) {
-            button("추천 다시 요청",true,()->task(()->api.retry(id),this::openReport));
+            JSONObject error = value.optJSONObject("error");
+            label(update, error == null ? "분류 결과는 그대로 있어요. 다시 시도하면 추천만 새로 만들어요."
+                    : error.optString("message"), 14, MUTED, 400, 0, 8);
+            addAction(update, "추천 다시 요청", true, () -> task(() -> api.retry(id), this::openReport));
         } else if ("QUEUED".equals(status) || "GENERATING".equals(status)) {
-            long elapsed=SystemClock.elapsedRealtime()-pollStart;
-            if(elapsed>=150000) text("추천이 지연되고 있어요. 지난 분석에서 이어서 확인할 수 있어요.",16,false);
-            if(elapsed<1800000) {
-                pendingReport=id;
-                if (foreground) main.postDelayed(()->poll(id),elapsed<180000?3000:10000);
-            }
-            else button("상태 다시 확인",false,()->{pollStart=SystemClock.elapsedRealtime();poll(id);});
+            long elapsed = SystemClock.elapsedRealtime() - pollStart;
+            String message = elapsed >= 150000 ? "시간이 오래 걸리고 있어요." :
+                    "GENERATING".equals(status) ? "성분과 관리법을 정리하고 있어요." : "맞춤 추천을 기다리고 있어요.";
+            label(update, message, 16, INK, 600, 0, 7);
+            label(update, "화면을 나가도 추천은 계속 만들어져요. 이력에서 다시 볼 수 있어요.",
+                    14, MUTED, 400, 0, 0);
+            if (elapsed < 1800000) {
+                pendingReport = id;
+                if (foreground) main.postDelayed(() -> poll(id), elapsed < 180000 ? 3000 : 10000);
+            } else addAction(update, "상태 다시 확인", false, () -> { pollStart = SystemClock.elapsedRealtime(); poll(id); });
         }
-        button("지난 분석 보기",false,()->history(1)); button("새 사진 분석",false,this::capture);
+        button("지난 분석 보기", false, () -> history(1));
+        button("새 사진 분석", false, this::startCapture);
     }
+
+    private String percent(double score) {
+        return Math.round(score * 100) + "%";
+    }
+
+    private void meter(LinearLayout owner, double score) {
+        ProgressBar meter = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        meter.setMax(1000);
+        meter.setProgress((int) Math.round(score * 1000));
+        meter.setProgressTintList(android.content.res.ColorStateList.valueOf(INK));
+        meter.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(LINE));
+        meter.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(6));
+        lp.bottomMargin = dp(3);
+        owner.addView(meter, lp);
+    }
+
+    private LinearLayout disclosure(LinearLayout owner, String title) {
+        LinearLayout container = card(owner, true, 14);
+        LinearLayout detail = style.column();
+        detail.setVisibility(View.GONE);
+        Button toggle = style.button(title, 44);
+        toggle.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        toggle.setPadding(0, 0, 0, 0);
+        style.actionSurface(toggle, WHITE, 12, false);
+        toggle.setText(title + "  ＋");
+        toggle.setOnClickListener(v -> {
+            boolean show = detail.getVisibility() != View.VISIBLE;
+            detail.setVisibility(show ? View.VISIBLE : View.GONE);
+            toggle.setText(title + (show ? "  −" : "  ＋"));
+        });
+        container.addView(toggle);
+        container.addView(detail);
+        return detail;
+    }
+
+    private String sourceNotice(JSONObject report) {
+        JSONObject metadata = report.optJSONObject("generation");
+        if (metadata == null) return "";
+        return switch (metadata.optString("origin")) {
+            case "source_cards" -> "근거 자료를 바탕으로 구성한 대체 안내예요.";
+            case "rule_fallback" -> "기본 관리 규칙으로 구성한 대체 안내예요.";
+            default -> "";
+        };
+    }
+
+    private void numberedRow(LinearLayout owner, int index, String name, String detail, int bubbleColor) {
+        LinearLayout row = style.row();
+        row.setPadding(0, dp(7), 0, dp(7));
+        TextView number = style.text(String.valueOf(index), 13, INK, 600);
+        number.setGravity(Gravity.CENTER);
+        number.setBackground(style.surface(bubbleColor, 20, false));
+        row.addView(number, dp(32), dp(32));
+        LinearLayout words = style.column();
+        words.setPadding(dp(11), 0, 0, 0);
+        label(words, name, 16, INK, 600, 0, 0);
+        if (!detail.isEmpty()) label(words, detail, 14, MUTED, 400, 4, 0);
+        row.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
+        owner.addView(row, -1, -2);
+    }
+
+    private void recommendation(JSONObject value, boolean evening) {
+        if (!showRecommendation(value)) return;
+        page("recommendation", null);
+        toolbar("맞춤 추천", () -> report(value), "분석 결과로", null);
+        JSONObject rec = value.optJSONObject("recommendation");
+        String source = sourceNotice(value);
+        if (!source.isEmpty()) label(page, source, 14, MUTED, 500, 0, 9);
+        String answer = rec.isNull("answer") ? "" : rec.optString("answer");
+        if (!answer.isEmpty()) {
+            LinearLayout summary = card(page, false, 20);
+            label(summary, "관리 안내", 14, MUTED, 500, 0, 8);
+            label(summary, answer, 17, INK, 400, 0, 0);
+        }
+        label(page, "추천 성분", 20, INK, 700, 12, 3);
+        JSONArray ingredients = rec.optJSONArray("ingredients");
+        if (ingredients != null && ingredients.length() > 0) {
+            label(page, "우선순위 순", 13, MUTED, 400, 0, 9);
+            List<JSONObject> sorted = objects(ingredients);
+            sorted.sort(java.util.Comparator.comparingInt(i -> i.optInt("priority", Integer.MAX_VALUE)));
+            for (int i = 0; i < sorted.size(); i++) {
+                JSONObject item = sorted.get(i);
+                numberedRow(card(page, true, 12), i + 1, item.optString("name"),
+                        item.isNull("purpose") ? "" : item.optString("purpose"), SOFT);
+            }
+        } else label(page, "맞춤 성분을 찾지 못했어요. 추천 이유를 확인해 주세요.", 14, MUTED, 400, 0, 7);
+        List<JSONObject> steps = objects(rec.optJSONArray("routine"));
+        steps.sort(java.util.Comparator.comparingInt(step -> step.optInt("step", Integer.MAX_VALUE)));
+        if (!steps.isEmpty()) {
+            label(page, "관리 루틴", 20, INK, 700, 13, 3);
+            LinearLayout timeline = style.column();
+            segment(page, "아침", "저녁", evening, selected -> routine(timeline, steps, selected));
+            page.addView(timeline);
+            routine(timeline, steps, evening);
+            LinearLayout periodic = style.column();
+            for (JSONObject step : steps) {
+                String time = step.optString("time");
+                if ("morning".equals(time) || "evening".equals(time) || "daily".equals(time)) continue;
+                label(periodic, step.optString("action"), 15, INK, 400, 5, 3);
+            }
+            if (periodic.getChildCount() > 0) {
+                LinearLayout card = card(page, false, 16);
+                label(card, "주기 관리", 14, MUTED, 500, 0, 4);
+                card.addView(periodic);
+            }
+        }
+        JSONArray reasoning = rec.optJSONArray("reasoning");
+        if (reasoning != null && reasoning.length() > 0) lines(disclosure(page, "추천 이유"), reasoning);
+        JSONArray notes = rec.optJSONArray("inputNotes");
+        if (notes != null && notes.length() > 0) lines(disclosure(page, "이렇게 가정했어요"), notes);
+        if (!rec.isNull("disclaimer")) label(page, rec.optString("disclaimer"), 13, MUTED, 400, 10, 0);
+    }
+
+    private List<JSONObject> objects(JSONArray data) {
+        List<JSONObject> result = new ArrayList<>();
+        for (int i = 0; data != null && i < data.length(); i++) {
+            JSONObject item = data.optJSONObject(i);
+            if (item != null) result.add(item);
+        }
+        return result;
+    }
+
+    private void routine(LinearLayout timeline, List<JSONObject> steps, boolean evening) {
+        timeline.removeAllViews();
+        int index = 0;
+        for (JSONObject step : steps) {
+            String time = step.optString("time");
+            if (!"daily".equals(time) && !(evening ? "evening" : "morning").equals(time)) continue;
+            numberedRow(timeline, ++index, step.optString("action"), "", SOFT);
+        }
+        if (index == 0) label(timeline, "이 시간대에는 따로 할 일이 없어요.", 14, MUTED, 400, 6, 8);
+    }
+
     private void poll(String id) {
         if (!foreground || busy || !"report".equals(screen)) return;
-        pendingReport=null; task(()->api.detail(id),this::report,()->poll(id));
+        pendingReport = null;
+        task(() -> api.detail(id), value -> {
+            int position = scroll.getScrollY();
+            report(value);
+            ScrollView update = scroll;
+            update.post(() -> update.scrollTo(0, position));
+        }, () -> poll(id));
     }
     private static android.graphics.Bitmap heatmap(JSONObject disease) {
         JSONObject e = disease.optJSONObject("explanation");
@@ -443,17 +1240,20 @@ public final class MainActivity extends Activity {
             return android.graphics.BitmapFactory.decodeByteArray(bytes,0,bytes.length);
         } catch(IllegalArgumentException invalid) {return null;}
     }
-    private static String timeLabel(String time) {
-        switch (time) {
-            case "morning":return "아침"; case "evening":return "저녁"; case "daily":return "매일";
-            case "weekly":return "매주"; default:return "일상 관리";
-        }
-    }
     @Override public void onBackPressed() {
         if (busy) return;
         switch (screen) {
             case "signup": auth(false); break;
-            case "survey": case "history": case "report": capture(); break;
+            case "guide": closeCapture(); break;
+            case "capture":
+                if (getPreferences(MODE_PRIVATE).getBoolean("hideGuide", false)) closeCapture();
+                else guide();
+                break;
+            case "survey": capture(); break;
+            case "optional": survey(); break;
+            case "history": case "my": home(); break;
+            case "report": backFromReport(); break;
+            case "recommendation": report(currentReport); break;
             default: super.onBackPressed();
         }
     }

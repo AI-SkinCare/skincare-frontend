@@ -24,6 +24,8 @@ android {
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'
     }
     buildFeatures { buildConfig true }
+    sourceSets.main.assets.srcDirs += ['../../SkinCare/Resources/Fonts',
+                                       '../../SkinCare/Resources/Assets.xcassets/BrandMark.imageset']
     buildTypes {
         debug {
             applicationIdSuffix '.debug'
