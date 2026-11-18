@@ -1,0 +1,36 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode 버전
+        run: xcodebuild -version
+
+      - name: SwiftLint
+        run: |
+          which swiftlint || brew install swiftlint
+          swiftlint lint --reporter github-actions-logging
+
+      - name: 시뮬레이터 선택
+        id: sim
+        run: |
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k in sorted(d, reverse=True) if 'iOS' in k for x in d[k] if x['name'].startswith('iPhone')))")
+          echo "udid=$DEVICE" >> "$GITHUB_OUTPUT"
+
+      - name: 빌드 · 테스트
+        run: |
+          xcodebuild test \
+            -project SkinCare.xcodeproj \
+            -scheme SkinCare \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO
