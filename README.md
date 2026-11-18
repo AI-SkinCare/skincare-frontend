@@ -6,7 +6,7 @@
 사용자가 서비스를 이용하는 iOS 앱을 담당합니다. 얼굴 사진 촬영과 설문을 받아 백엔드로 보내고, 이미지 분류 참고 결과와 맞춤 성분·관리법 추천, 분석 이력을 보여줍니다.
 
 ## 주요 기능
-- 얼굴 타원 가이드가 있는 내장 카메라 촬영 / 앨범 선택 (HEIC → JPEG 변환, 메타데이터 제거)
+- 얼굴 타원 가이드가 있는 내장 카메라 촬영(얼굴이 가이드 안에 들어와야 셔터 활성) / 앨범 선택 후 얼굴 위치 맞추기 (HEIC → JPEG 변환, 메타데이터 제거)
 - 설문 입력 (직전 분석 설문으로 기본값)
 - 6종 이미지 분류 참고 결과 (건선·아토피·여드름·정상·주사·지루, 모델 분류 점수)
 - 성분·관리 루틴·추천 이유 표시, 추천 보류(불확실·고민 없음)·실패·재요청 처리
@@ -28,7 +28,7 @@
 - API 주소: Debug는 `http://localhost:8080/api/v1`, Release는 `Config/Release.xcconfig`의 `API_BASE_URL`. (백엔드 `server.port` 기본 8080 — 백엔드 ff2cc9c)
 - 실기기에서 맥의 로컬 백엔드에 붙으려면 `Local.xcconfig`에 `API_BASE_URL = http:/$()/<맥 LAN IP>:8080/api/v1`
 - 백엔드 없이 UI 확인 (Debug 전용): 스킴 Arguments에 `-MockAPI` 추가 → 목 응답으로 자동 로그인
-  - `-StartScreen <이름>`으로 화면 바로 열기: `login` `signup` `home` `guide` `capture` `camera` `survey` `report-completed` `report-queued` `report-generating` `report-uncertain` `report-no-concern` `report-failed` `recommendation` `history` `mypage`
+  - `-StartScreen <이름>`으로 화면 바로 열기: `login` `signup` `home` `guide` `capture` `camera` `album-align` `survey` `report-completed` `report-queued` `report-generating` `report-uncertain` `report-no-concern` `report-failed` `recommendation` `history` `mypage`
   - `-MockAIDown`(분석 서버 점검 중), `-MockEmpty`(이력 없음)
 - 실제 백엔드 개발 서버에서 상황 재현 (Debug 전용): `-FixtureScenario <값>` → `X-Fixture-Scenario` 헤더. 값: `ok` `uncertain` `no-concern` `rec-timeout` `rec-slow` `no-face` `ai-down`
 - 테스트: `xcodebuild test -project SkinCare.xcodeproj -scheme SkinCare -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max'`

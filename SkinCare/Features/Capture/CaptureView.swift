@@ -6,6 +6,13 @@ import SwiftUI
 struct CaptureView: View {
     @Environment(CaptureFlowModel.self) private var model
     @State private var pickerItem: PhotosPickerItem?
+    /// 앨범에서 고른 사진 — 얼굴 위치 맞추기 화면을 거친다
+    @State private var albumPick: AlbumPick?
+
+    private struct AlbumPick: Identifiable {
+        let id = UUID()
+        let data: Data
+    }
 
     @State private var showsCamera = Self.opensCameraOnStart
 
@@ -67,11 +74,23 @@ struct CaptureView: View {
             guard let item else { return }
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self) {
-                    await model.handlePickedImage(data)
+                    albumPick = AlbumPick(data: data)
                 } else {
                     model.handleImageLoadFailure()
                 }
                 pickerItem = nil
+            }
+        }
+        #if DEBUG
+        .onAppear {
+            if DebugLaunch.startScreen == .albumAlign, albumPick == nil, let data = DebugLaunch.sampleAlbumImage() {
+                albumPick = AlbumPick(data: data)
+            }
+        }
+        #endif
+        .fullScreenCover(item: $albumPick) { pick in
+            AlbumFaceAlignView(imageData: pick.data) { cropped in
+                Task { await model.handlePickedImage(cropped) }
             }
         }
         .fullScreenCover(isPresented: $showsCamera) {
