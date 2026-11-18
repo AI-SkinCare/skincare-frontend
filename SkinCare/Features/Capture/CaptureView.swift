@@ -100,25 +100,27 @@ struct CaptureView: View {
         }
     }
 
+    /// 틀(4:5, 화면 너비)을 먼저 정하고 사진은 overlay로 채운다.
+    /// 사진을 ZStack 안에 scaledToFill로 두면 사진 크기가 레이아웃을 키워 화면 전체가 옆으로 밀린다.
     private var preview: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                .fill(Color.canvasSoft)
-            if let image = model.previewImage {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-                    .accessibilityLabel("선택한 얼굴 사진 미리보기")
-            } else if model.isProcessingImage {
-                ProgressView().tint(.ink)
-            } else {
-                FaceGuide()
+        let shape = RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+        return shape
+            .fill(Color.canvasSoft)
+            .aspectRatio(4 / 5, contentMode: .fit)
+            .frame(maxWidth: .infinity)
+            .overlay {
+                if let image = model.previewImage {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .accessibilityLabel("선택한 얼굴 사진 미리보기")
+                } else if model.isProcessingImage {
+                    ProgressView().tint(.ink)
+                } else {
+                    FaceGuide()
+                }
             }
-        }
-        .aspectRatio(4 / 5, contentMode: .fit)
-        .frame(maxWidth: .infinity)
-        .clipped()
+            .clipShape(shape)
     }
 
     private var sourceButtons: some View {
