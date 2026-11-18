@@ -133,6 +133,9 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             captureScreen("report");
             onUi(()->click("지난 분석 보기")); await("지난 분석",5000);
             account.login(email,password);
+            java.lang.reflect.Field accessToken = SpringClient.class.getDeclaredField("access");
+            accessToken.setAccessible(true);
+            accessToken.set(account, "expired-for-refresh-test");
             JSONObject item=account.history(1).getJSONArray("items").getJSONObject(0);
             JSONObject detail=account.detail(item.getString("analysisId"));
             assertTrue(detail.getJSONObject("disease").has("confidence"));

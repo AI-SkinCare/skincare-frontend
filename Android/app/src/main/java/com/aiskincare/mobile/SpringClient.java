@@ -6,9 +6,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpCookie;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /** Called from one worker thread. Credentials live only for the current app session. */
@@ -31,7 +34,7 @@ final class SpringClient {
         } catch (Failure error) {
             if (error.status != 401 || !authenticated || refresh.isEmpty()) throw error;
             try {
-                remember(json("POST", "/auth/refresh", false, new JSONObject().put("refreshToken", refresh)));
+                json("POST", "/auth/refresh", false, new JSONObject().put("refreshToken", refresh));
             } catch (Failure rejected) {
                 if (rejected.status == 401) forget();
                 throw rejected;
@@ -69,7 +72,11 @@ final class SpringClient {
                 throw new Failure(status, message);
             }
             try (InputStream in = connection.getInputStream()) {
-                return new JSONObject(read(in)).getJSONObject("data");
+                JSONObject data = new JSONObject(read(in)).getJSONObject("data");
+                if (path.equals("/auth/login") || path.equals("/auth/refresh")) {
+                    remember(data, connection);
+                }
+                return data;
             }
         } finally { connection.disconnect(); }
     }
@@ -86,15 +93,37 @@ final class SpringClient {
         return request(method, path, authenticated, "application/json",
                 body == null ? null : out -> out.write(body.toString().getBytes(StandardCharsets.UTF_8)));
     }
-    private void remember(JSONObject tokens) throws Exception {
-        String nextAccess = tokens.getString("accessToken"), nextRefresh = tokens.getString("refreshToken");
+    private void remember(JSONObject tokens, HttpURLConnection connection) throws Exception {
+        String nextAccess = tokens.getString("accessToken");
+        String nextRefresh = tokens.isNull("refreshToken") ? "" : tokens.optString("refreshToken");
+        if (nextRefresh.isEmpty()) nextRefresh = refreshCookie(connection);
+        if (nextRefresh.isEmpty()) throw new IOException("로그인 세션 갱신 정보를 받지 못했어요.");
         access = nextAccess;
         refresh = nextRefresh;
     }
+
+    private static String refreshCookie(HttpURLConnection connection) {
+        boolean https = "https".equalsIgnoreCase(connection.getURL().getProtocol());
+        for (Map.Entry<String, List<String>> header : connection.getHeaderFields().entrySet()) {
+            if (!"Set-Cookie".equalsIgnoreCase(header.getKey())) continue;
+            for (String value : header.getValue()) {
+                try {
+                    for (HttpCookie cookie : HttpCookie.parse(value)) {
+                        if ("refresh_token".equals(cookie.getName()) && !cookie.hasExpired()
+                                && (!cookie.getSecure() || https)) return cookie.getValue();
+                    }
+                } catch (IllegalArgumentException ignored) {
+                    // An unrelated or malformed cookie should not prevent login.
+                }
+            }
+        }
+        return "";
+    }
+
     void forget() { access = ""; refresh = ""; }
     void deleteAccount() throws Exception { json("DELETE", "/users/me", true, null); forget(); }
     void login(String email, String password) throws Exception {
-        remember(json("POST", "/auth/login", false, new JSONObject().put("email", email).put("password", password)));
+        json("POST", "/auth/login", false, new JSONObject().put("email", email).put("password", password));
     }
     void signup(String email, String password, String nickname, JSONObject agreements) throws Exception {
         json("POST", "/auth/signup", false, new JSONObject().put("email", email).put("password", password)
