@@ -7,7 +7,7 @@ let package = Package(
     platforms: [.macOS(.v13)],
     targets: [
         .target(name: "SkinCare", path: "SkinCare", sources: [
-            "Models/Enums.swift", "Models/AnalysisModels.swift", "Models/AuthModels.swift",
+            "Models/Enums.swift", "Models/AnalysisModels.swift", "Models/AuthModels.swift", "Models/SymptomProfile.swift",
             "Networking/APIRequest.swift", "Networking/APIError.swift", "Networking/APIClient.swift",
             "Networking/HTTPTransport.swift", "Networking/Endpoints.swift", "Networking/MultipartFormData.swift",
             "Networking/AuthTokenManager.swift", "Networking/RefreshTokenStore.swift",

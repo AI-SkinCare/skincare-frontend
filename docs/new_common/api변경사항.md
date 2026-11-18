@@ -228,6 +228,14 @@
 
 `quality_rejected`를 WITHHELD로 저장하고 `generation` 정보를 상세 응답에 추가했습니다. `not_generated`는 생성 출처이며 recommendationStatus가 아닙니다. 피할 성분 설문도 연결했습니다. 기존 데이터·필드는 유지하며 새 DB V3를 적용합니다.
 
+### 2026-11-17 — 현재 피부 상태 선택 설문 (추가 변경)
+
+기존 `POST /analyses`의 `survey` JSON에 `symptomProfile`을 선택으로 보냅니다.
+예: `{"itch":"frequent","recurringRedness":false,"areas":["eyebrows","around_nose"]}`.
+`false`와 `"none"`은 명시적 답변이며 미응답 항목은 생략합니다.
+응답은 해당 분석에 저장되지만 분류 점수와 성분 추천에는 사용하지 않습니다.
+다음 분석의 기본값에는 현재 피부 상태를 넣지 않으며 기존 설문은 계속 제출할 수 있습니다.
+
 ### 2026-10-16 — 분석 API를 이미지 분류 + 추천으로 전환 (호환 깨짐)
 
 - 커밋: `develop` `bdce8da` (이전 버전 `64b2143`)

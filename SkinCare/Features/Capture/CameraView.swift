@@ -1,9 +1,10 @@
 @preconcurrency import AVFoundation
 import SwiftUI
 
-/// 앱 내장 전면 카메라 + 얼굴 타원 가이드 (패치 §2 SCR-05).
+/// 전면 또는 후면 카메라로 같은 정면 구도를 촬영한다.
 /// 촬영 결과는 메모리(Data)로만 넘기고 사진 앱이나 파일에 저장하지 않는다 (NFR-PRI-01).
 struct CameraView: View {
+    var useRearCamera = false
     let onCapture: (Data) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -170,11 +171,11 @@ struct CameraView: View {
                 || AVCaptureDevice.authorizationStatus(for: .video) == .restricted ? .denied : .unavailable
         case true:
             do {
-                try await camera.configure()
+                try await camera.configure(position: useRearCamera ? .back : .front)
                 camera.start()
                 state = .ready
-            } catch CameraController.CameraError.noFrontCamera {
-                state = .unavailable
+            } catch CameraController.CameraError.noCamera {
+                state = .failed("선택한 카메라를 사용할 수 없어요. 다른 촬영 방법이나 앨범을 선택해 주세요.")
             } catch {
                 state = .failed("카메라를 켜지 못했어요. 잠시 후 다시 시도해 주세요.")
             }
@@ -252,7 +253,7 @@ private struct CameraPreview: UIViewRepresentable {
 /// AVCaptureSession 설정·촬영. 세션 작업은 전용 큐에서 한다 (startRunning은 블로킹).
 final class CameraController: NSObject, @unchecked Sendable {
     enum CameraError: Error {
-        case noFrontCamera, configurationFailed, captureFailed
+        case noCamera, configurationFailed, captureFailed
     }
 
     let session = AVCaptureSession()
@@ -269,11 +270,11 @@ final class CameraController: NSObject, @unchecked Sendable {
         }
     }
 
-    func configure() async throws {
+    func configure(position: AVCaptureDevice.Position) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             queue.async { [self] in
-                guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front) else {
-                    continuation.resume(throwing: CameraError.noFrontCamera)
+                guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) else {
+                    continuation.resume(throwing: CameraError.noCamera)
                     return
                 }
                 do {

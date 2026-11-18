@@ -4,7 +4,7 @@
 
 스마트폰 피부 이미지 분류와 맞춤 성분 추천 AI 서비스의 **프론트엔드** (2026-10-15 개정. 기존 과제명: 스마트폰 촬영 영상 기반 피부 상태 정량화 및 맞춤 성분 추천).
 
-**이 저장소는 Swift iOS 앱 프로젝트다.** (Swift / SwiftUI)
+이 저장소에는 SwiftUI iOS 앱과 `Android/`의 네이티브 Android 앱이 있다. 두 앱은 Spring의 같은 분석 계약을 사용한다.
 
 - `docs/` 안의 문서를 토대로 제작한다.
 
@@ -20,7 +20,7 @@
   - `disease`: `label`, `labelEn`, `confidence`, `uncertain`, `probabilities`(6종). 점수를 보여줄 때는 반드시 **"모델 분류 점수"**로 표기하고 질환 확률처럼 보이게 하지 않는다.
   - 추천 객체 구조(skinType·concerns `{code,label}`, ingredients·routine·reasoning·answer·disclaimer)는 기존과 같음. `guidance` 안내 문장 상시 표시. 보류는 오류가 아니며 빈 추천으로 대체하지 않는다.
 - **폴링**: 처음 3분 3초, 이후 10초, **150초 이후 지연 안내, 최대 30분**(기존 15분).
-- **설문**: 기존 그대로 (`gender`·`ageBand` 필수, `concerns` 코드 최대 3 — 정상으로 분류되면 추천 대상).
+- **설문**: `gender`·`ageBand` 필수, `concerns` 코드 최대 3(정상으로 분류되면 추천 대상). `symptomProfile`은 현재 촬영에 한해 답하는 선택 항목으로 새 분석에 자동 복사하지 않는다.
 - **문구**: 분류 라벨(질환명)은 **그대로 화면에 띄운다** (팀 결정, 출시하지 않음). 대신 "이미지 분류 참고 결과이며 의학적 진단이 아닙니다." 안내를 상시 표시하고, 점수는 "모델 분류 점수"로만 표기한다.
 - 앱 반영 완료 (2026-10-17, 체크리스트 `docs/patch/02_pipeline-revision-checklist.md`). `docs/patch/01_swift-ios-patch.md`의 iOS 전용 규칙은 유효하고, 지표·추이·데모 관련 부분은 폐기.
 
@@ -57,6 +57,7 @@
 
 | 경로 | 내용 |
 |------|------|
+| `Android/README.md` | Android 빌드, 서버 주소 설정, 정면 촬영 및 연동 시연 |
 | `docs/new_common/api변경사항.md` | **백엔드 API 계약 기준** (백엔드 제공, develop `bdce8da`) — 전체 API·변경점·앱 할 일 |
 | `docs/new_common/스킨케어_수행계획서_파이프라인개정_20261015.docx` / `.pdf` | **최신 기획** — 이미지 분류(DenseNet121) + 성분 추천(Qwen2.5) 파이프라인 개정안, Spring Boot·Swift 연동 계약안(부록 A·B) |
 | `docs/common/01_요구사항정의서_스킨케어.docx` / `.pdf` | (v1.0, 개정으로 일부 폐기) 기능·비기능·모델 성능 요구사항, 추적표 |

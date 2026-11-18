@@ -17,7 +17,7 @@ struct SurveyView: View {
                     SurveyStepOne(survey: $model.survey)
                         .transition(.asymmetric(insertion: .move(edge: .leading).combined(with: .opacity), removal: .opacity))
                 } else {
-                    ScreenHeader(title: "생활 습관을 알려 주세요.", subtitle: "모두 선택 사항이에요. 알려 주시면 추천이 더 정확해져요.")
+                    ScreenHeader(title: "피부 상태와 생활 습관", subtitle: "모두 선택 사항이에요. 답하지 않아도 분석할 수 있어요.")
                     SurveyStepTwo(survey: $model.survey)
                         .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
                 }
@@ -97,7 +97,7 @@ private struct SurveyStepOne: View {
     }
 }
 
-// MARK: - 2단계: 수면 · 수분 · 자외선 · 스트레스 · 고민 · 사용 제품 · 추가 요청
+// MARK: - 2단계: 현재 피부 상태와 추천에 쓰는 선택 설문
 
 private struct SurveyStepTwo: View {
     @Binding var survey: Survey
@@ -105,6 +105,8 @@ private struct SurveyStepTwo: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xl) {
+            SymptomProfileQuestions(profile: $survey.symptomProfile)
+
             SurveyQuestion(title: "하루 수면 시간") {
                 if let hours = survey.sleepHours {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -238,6 +240,73 @@ private struct SurveyStepTwo: View {
             concerns.append(concern)
         }
         survey.concerns = concerns
+    }
+}
+
+private struct SymptomProfileQuestions: View {
+    @Binding var profile: SymptomProfile?
+
+    var body: some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                Text("최근 일주일의 상태를 골라 주세요. 답변은 이번 분석에 저장되며 현재 분류나 추천 결과에는 반영되지 않아요.")
+                    .appText(.bodySmall)
+                    .foregroundStyle(.textMuted)
+                question("얼굴이 가려웠나요?", \.itch, ItchFrequency.knownCases, label: \.label)
+                question("얼굴에 각질이 보였다면 어떤 느낌이었나요?", \.flaking, FlakingPattern.knownCases, label: \.label)
+                question("얼굴이 붉어졌다가 가라앉는 일이 반복됐나요?", \.recurringRedness, [true, false]) {
+                    $0 ? "네" : "아니요"
+                }
+                question("검거나 하얗게 모공이 막혀 보였나요?", \.visiblePlugs, [true, false]) {
+                    $0 ? "네" : "아니요"
+                }
+                question("지금 피부 고민을 처음 느낀 게 언제인가요?", \.onset, SymptomOnset.knownCases, label: \.label)
+                SurveyQuestion(title: "어느 부위가 불편했나요?", caption: "여러 곳 선택 가능") {
+                    FlowLayout {
+                        ForEach(SymptomArea.knownCases, id: \.self) { area in
+                            ChoiceChip(title: area.label, isSelected: profile?.areas?.contains(area) == true) {
+                                var next = profile ?? SymptomProfile()
+                                var areas = next.areas ?? []
+                                if areas.contains(area) {
+                                    areas.removeAll { $0 == area }
+                                } else {
+                                    areas.append(area)
+                                }
+                                next.areas = areas
+                                profile = next.sanitized()
+                            }
+                        }
+                    }
+                }
+                if profile != nil {
+                    Button("피부 상태 답변 지우기") { profile = nil }
+                        .buttonStyle(.softPill)
+                }
+            }
+            .padding(.top, Spacing.md)
+        } label: {
+            Text("최근 피부 상태 (선택)")
+                .appText(.link)
+        }
+        .tint(.ink)
+    }
+
+    private func question<T: Hashable>(
+        _ title: String, _ field: WritableKeyPath<SymptomProfile, T?>, _ options: [T],
+        label: @escaping (T) -> String
+    ) -> some View {
+        SurveyQuestion(title: title) {
+            FlowLayout {
+                ForEach(options, id: \.self) { option in
+                    let selected = profile?[keyPath: field] == option
+                    ChoiceChip(title: label(option), isSelected: selected) {
+                        var next = profile ?? SymptomProfile()
+                        next[keyPath: field] = selected ? nil : option
+                        profile = next.sanitized()
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -15,6 +15,7 @@ struct Survey: Codable, Sendable, Equatable {
     var currentProducts: [String]?
     var note: String?
     var avoidIngredients: [String]?
+    var symptomProfile: SymptomProfile?
 
     static let maxConcerns = 3
     static let maxProducts = 5
@@ -42,6 +43,14 @@ struct Survey: Codable, Sendable, Equatable {
             .filter { !$0.isEmpty }
         if copy.avoidIngredients?.isEmpty == true { copy.avoidIngredients = nil }
         if copy.note?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true { copy.note = nil }
+        copy.symptomProfile = symptomProfile?.sanitized()
+        return copy
+    }
+
+    /// 피부 상태는 매 분석에서 달라질 수 있어 직전 답변을 복사하지 않는다.
+    func defaultsForNewAnalysis() -> Survey {
+        var copy = sanitized()
+        copy.symptomProfile = nil
         return copy
     }
 }

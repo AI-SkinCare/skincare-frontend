@@ -40,16 +40,19 @@ final class CaptureFlowModel {
         guard let latest = try? await api.send(AnalysisAPI.list(page: 1, size: 1)).items.first,
               let previous = try? await api.send(AnalysisAPI.detail(id: latest.analysisId)).survey,
               survey == Survey() else { return }
-        survey = previous.sanitized()
+        survey = previous.defaultsForNewAnalysis()
     }
 
     func handlePickedImage(_ data: Data) async {
+        guard !isProcessingImage else { return }
+        image = nil
+        previewImage = nil
         isProcessingImage = true
         imageError = nil
         defer { isProcessingImage = false }
 
         let result = await Task.detached(priority: .userInitiated) {
-            Result { () throws(ImageValidationError) -> ProcessedImage in try ImageProcessor.process(data) }
+            Result { () throws(ImageValidationError) -> ProcessedImage in try ImageProcessor.prepareForAnalysis(data) }
         }.value
 
         switch result {
@@ -65,6 +68,8 @@ final class CaptureFlowModel {
     }
 
     func handleImageLoadFailure() {
+        image = nil
+        previewImage = nil
         imageError = ImageValidationError.unreadable.message
     }
 
