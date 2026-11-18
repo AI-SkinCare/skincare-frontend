@@ -14,6 +14,8 @@ struct CameraView: View {
     @State private var state: CameraState = .preparing
     @State private var isCapturing = false
     @State private var flash = false
+    /// 미리보기(전체 화면) 크기. 찍은 사진을 가이드 영역으로 자를 때 쓴다.
+    @State private var viewSize: CGSize = .zero
 
     enum CameraState: Equatable {
         case preparing, ready, denied, unavailable
@@ -33,6 +35,8 @@ struct CameraView: View {
                     }
                     FaceGuideOverlay(guide: guide, isAligned: tracker.isStable)
                 }
+                .onAppear { viewSize = proxy.size }
+                .onChange(of: proxy.size) { _, size in viewSize = size }
             }
             .ignoresSafeArea()
 
@@ -170,9 +174,18 @@ struct CameraView: View {
         isCapturing = true
         defer { isCapturing = false }
         do {
-            let data = try await camera.capturePhoto()
+            let raw = try await camera.capturePhoto()
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             withAnimation(.easeOut(duration: 0.1)) { flash = true }
+            let size = viewSize
+            let area = FaceGuideLayout.cropArea(for: FaceGuideLayout.guideRect(in: size))
+            // 미리보기에서 보이던 그대로(좌우 반전 포함) 가이드 주변만 자른다. 실패하면 원본을 넘긴다.
+            let data = await Task.detached(priority: .userInitiated) {
+                guard let image = OrientedImage.upright(from: raw),
+                      let rect = FaceGuideLayout.pixelRect(of: area, viewSize: size, imageSize: image.pixelSize)
+                else { return raw }
+                return image.jpegData(cropping: rect) ?? raw
+            }.value
             try? await Task.sleep(for: .milliseconds(120))
             onCapture(data)
             dismiss()
@@ -323,6 +336,14 @@ final class CameraController: NSObject, @unchecked Sendable {
                     session.addOutput(output)
                     session.addOutput(metadataOutput)
                     output.maxPhotoQualityPrioritization = .quality
+                    // 전면 카메라 미리보기는 거울처럼 보인다. 찍은 사진도 보이던 그대로(좌우 반전) 나오게 맞춘다.
+                    if let connection = output.connection(with: .video) {
+                        if connection.isVideoMirroringSupported {
+                            connection.automaticallyAdjustsVideoMirroring = false
+                            connection.isVideoMirrored = true
+                        }
+                        if connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
+                    }
                     if metadataOutput.availableMetadataObjectTypes.contains(.face) {
                         metadataOutput.metadataObjectTypes = [.face]
                         metadataOutput.setMetadataObjectsDelegate(self, queue: queue)

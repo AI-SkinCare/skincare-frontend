@@ -8,6 +8,23 @@ enum FaceGuideLayout {
         let height = width * 4 / 3
         return CGRect(x: (size.width - width) / 2, y: size.height * 0.46 - height / 2, width: width, height: height)
     }
+
+    /// 업로드할 사진으로 자르는 영역: 가이드 + 좌우 30%·위아래 20% 여유 (카메라·앨범 공통)
+    static func cropArea(for guide: CGRect) -> CGRect {
+        guide.insetBy(dx: -guide.width * 0.3, dy: -guide.height * 0.2)
+    }
+
+    /// 화면 채움(aspect fill)으로 보이던 이미지에서 화면 영역 `area`에 해당하는 픽셀 영역. 이미지 밖은 잘라낸다.
+    static func pixelRect(of area: CGRect, viewSize: CGSize, imageSize: CGSize) -> CGRect? {
+        guard viewSize.width > 0, viewSize.height > 0, imageSize.width > 0, imageSize.height > 0 else { return nil }
+        let scale = max(viewSize.width / imageSize.width, viewSize.height / imageSize.height)
+        let originX = (viewSize.width - imageSize.width * scale) / 2
+        let originY = (viewSize.height - imageSize.height * scale) / 2
+        let rect = CGRect(x: (area.minX - originX) / scale, y: (area.minY - originY) / scale,
+                          width: area.width / scale, height: area.height / scale)
+        let clipped = rect.intersection(CGRect(origin: .zero, size: imageSize)).integral
+        return clipped.isNull || clipped.isEmpty ? nil : clipped
+    }
 }
 
 /// 타원 바깥을 어둡게 하고 타원 테두리를 그린다. 맞으면 실선, 아니면 점선.

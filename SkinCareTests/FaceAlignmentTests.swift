@@ -61,3 +61,29 @@ struct FaceAlignmentTests {
             == FaceAlignment.evaluate(faces: [original], guide: guide))
     }
 }
+
+/// 화면 채움 미리보기 영역 → 사진 픽셀 영역 (촬영 사진을 가이드 크기로 자르기)
+struct GuideCropTests {
+    @Test("세로 화면이 3:4 사진보다 길면 좌우가 잘려 보인다 → 가운데 영역으로 환산")
+    func aspectFill() {
+        // 화면 400×800, 사진 3000×4000 → 배율 0.2 (높이 기준), 사진 폭 600pt 중 가운데 400pt만 보임
+        let rect = FaceGuideLayout.pixelRect(of: CGRect(x: 100, y: 200, width: 200, height: 400),
+                                             viewSize: CGSize(width: 400, height: 800),
+                                             imageSize: CGSize(width: 3000, height: 4000))
+        #expect(rect == CGRect(x: 1000, y: 1000, width: 1000, height: 2000))
+    }
+
+    @Test("사진 밖으로 나가는 부분은 잘라낸다")
+    func clipped() {
+        let rect = FaceGuideLayout.pixelRect(of: CGRect(x: -50, y: -50, width: 200, height: 200),
+                                             viewSize: CGSize(width: 300, height: 400),
+                                             imageSize: CGSize(width: 3000, height: 4000))
+        #expect(rect == CGRect(x: 0, y: 0, width: 1500, height: 1500))
+    }
+
+    @Test("가이드 + 좌우 30%·위아래 20%")
+    func cropArea() {
+        let area = FaceGuideLayout.cropArea(for: CGRect(x: 100, y: 100, width: 100, height: 200))
+        #expect(area == CGRect(x: 70, y: 60, width: 160, height: 280))
+    }
+}

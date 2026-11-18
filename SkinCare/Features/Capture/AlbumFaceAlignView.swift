@@ -172,7 +172,7 @@ struct AlbumFaceAlignView: View {
     /// 잘라낼 영역 (사진 픽셀 좌표): 가이드 주변으로 여유를 둔다.
     private func cropRect(size: CGSize, guide: CGRect, loaded: AlbumImage) -> CGRect? {
         let frame = imageFrame(size: size, pixelSize: loaded.pixelSize)
-        let area = guide.insetBy(dx: -guide.width * 0.3, dy: -guide.height * 0.2)
+        let area = FaceGuideLayout.cropArea(for: guide)
         let inImage = CGRect(x: (area.minX - frame.minX) / currentScale, y: (area.minY - frame.minY) / currentScale,
                              width: area.width / currentScale, height: area.height / currentScale)
         let clipped = inImage.intersection(CGRect(origin: .zero, size: loaded.pixelSize)).integral
@@ -328,6 +328,20 @@ struct AlbumImage {
 final class OrientedImage: @unchecked Sendable {
     let cgImage: CGImage
     init(cgImage: CGImage) { self.cgImage = cgImage }
+
+    /// 카메라 사진 데이터(EXIF 방향·좌우 반전 포함)를 똑바로 세워 읽는다.
+    static func upright(from data: Data, maxPixelSize: Int = 4096) -> OrientedImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary)
+        else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary).map(OrientedImage.init(cgImage:))
+    }
+
+    var pixelSize: CGSize { CGSize(width: cgImage.width, height: cgImage.height) }
 
     /// 영역을 잘라 JPEG로. 메타데이터는 넣지 않는다 (업로드 직전 ImageProcessor가 다시 검증·변환한다).
     func jpegData(cropping rect: CGRect) -> Data? {
