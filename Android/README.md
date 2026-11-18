@@ -20,6 +20,8 @@ Android Studio에서 이 디렉터리를 연다. Android SDK Platform 35, Androi
 
 ## 멘토링 시연 순서
 
+[팀 서버 추천 완료 시연](docs/analysis-team-recommendation-demo.mp4)은 약 50초다. 가상 인물 사진과 설문을 실제 팀 Spring 서버에 제출했다. 8443 FastAPI의 추천 결과를 받아 Android에 성분 1개와 관리 루틴 2단계를 표시했고, 이력에서도 다시 조회했다. 이 요청에서 사진 제출부터 추천 표시까지 17.0초가 걸렸다. AI 응답의 모델 식별자를 팀 서버 배포본의 40자 필드에 맞춘 뒤 확인한 결과다.
+
 Android 15 에뮬레이터에서 가상 인물의 사진과 설문으로 실행한 화면이다. 이 사례는 모델 분류 점수가 낮아 추천이 보류됐다.
 
 ![정면 촬영, 선택 설문, 분류 결과와 추천 보류 화면](docs/analysis-flow.png)
