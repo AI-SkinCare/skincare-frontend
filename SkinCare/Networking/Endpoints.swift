@@ -1,5 +1,21 @@
 import Foundation
 
+struct KnowledgeResult: Decodable, Sendable {
+    struct Source: Decodable, Identifiable, Sendable {
+        let id, title, text, publisher, url: String
+    }
+    let answer, asOf, origin: String
+    let answerSourceId: String?
+    let sources: [Source]
+}
+
+enum KnowledgeAPI {
+    private struct Query: Encodable { let query: String; let kind: String }
+    static func search(_ query: String, kind: String) -> APIRequest<KnowledgeResult> {
+        APIRequest(method: .post, path: "/knowledge/search", body: .encoding(Query(query: query, kind: kind)))
+    }
+}
+
 // 백엔드 API (docs/new_common/api변경사항.md §1)
 
 enum AuthAPI {

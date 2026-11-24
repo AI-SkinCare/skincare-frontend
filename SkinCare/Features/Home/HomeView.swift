@@ -28,6 +28,8 @@ struct HomeView: View {
                 if let id = session.user?.id {
                     NavigationLink("매일 피부 기록") { DailySkinJournal(userID: id) }
                         .buttonStyle(.outline)
+                    NavigationLink("피부 자료 검색") { SkinKnowledgeView() }
+                        .buttonStyle(.outline)
                 }
                 recentSection
                 flowGuide

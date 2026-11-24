@@ -228,6 +228,33 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
 
     // Run only against a disposable localhost Spring database with the real or fixture AI attached.
     public void testLocalSpringFlow() throws Exception { checkLocalSpringFlow(false); }
+
+    public void testLocalKnowledgeSearch() throws Exception {
+        assertEquals("http://10.0.2.2:3000/api/v1", BuildConfig.SPRING_URL);
+        getActivity();
+        String email = "knowledge-" + UUID.randomUUID() + "@example.invalid";
+        String password = UUID.randomUUID() + "a1!";
+        SpringClient account = new SpringClient(BuildConfig.SPRING_URL);
+        account.signup(email, password, "자료검색", new JSONObject().put("terms",true).put("privacy",true)
+                .put("imageProcessing",true).put("over14",true));
+        try {
+            onUi(() -> {
+                List<EditText> fields = views(EditText.class);
+                fields.get(0).setText(email); fields.get(1).setText(password); click("로그인");
+            });
+            await("피부 자료 검색", 15000);
+            onUi(() -> { click("피부 자료 검색"); views(EditText.class).get(0).setText("나트륨 영양표시"); click("검색"); });
+            await("답변 출처 · 식품의약품안전처 · 식품안전나라", 20000);
+            onUi(() -> { views(Spinner.class).get(0).setSelection(1); views(EditText.class).get(0).setText("세라마이드"); });
+            onUi(() -> click("검색"));
+            await("미국 국립의학도서관 · PubMed", 15000);
+            onUi(() -> { views(Spinner.class).get(0).setSelection(2); views(EditText.class).get(0).setText("징크옥사이드"); });
+            onUi(() -> click("검색"));
+            await("미국 제품 라벨 · openFDA", 15000);
+            onUi(() -> { views(EditText.class).get(0).setText("기차시간표"); click("검색"); });
+            await("선택한 자료에서 질문에 맞는 근거를 찾지 못했어요. 성분명이나 다른 검색어로 찾아보세요.", 12000);
+        } finally { account.login(email, password); account.deleteAccount(); }
+    }
     public void testLocalSpringSideFlow() throws Exception { checkLocalSpringFlow(true); }
     private void checkLocalSpringFlow(boolean side) throws Exception {
         assertEquals("http://10.0.2.2:3000/api/v1", BuildConfig.SPRING_URL);

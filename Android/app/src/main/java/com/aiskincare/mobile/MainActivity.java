@@ -400,6 +400,7 @@ public final class MainActivity extends Activity {
                 14, MUTED, 400, 0, 12);
         addAction(start, "피부 분석 시작", true, this::startCapture);
         if (userId > 0) button("매일 피부 기록", false, this::diary);
+        if (userId > 0) button("피부 자료 검색", false, this::knowledge);
 
         LinearLayout recentHeader = style.row();
         recentHeader.addView(style.text("최근 결과", 20, INK, 700), new LinearLayout.LayoutParams(0, -2, 1));
@@ -447,6 +448,57 @@ public final class MainActivity extends Activity {
         String account = android.util.Base64.encodeToString(server.getBytes(java.nio.charset.StandardCharsets.UTF_8),
                 android.util.Base64.URL_SAFE | android.util.Base64.NO_WRAP);
         return getSharedPreferences("diary-" + account + "-" + userId, MODE_PRIVATE);
+    }
+
+    private void knowledge() {
+        page("knowledge", null);
+        toolbar("피부 자료 검색", this::home, "홈", null);
+        Spinner kind = new Spinner(this);
+        kind.setContentDescription("자료 종류");
+        kind.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"관리 안내", "연구 문헌", "제품 라벨"}));
+        page.addView(kind, -1, dp(48));
+        EditText query = field("성분명이나 질문 입력", InputType.TYPE_CLASS_TEXT);
+        query.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(160)});
+        LinearLayout results = style.column();
+        String[] kinds = {"guide", "research", "label"};
+        button("검색", true, () -> {
+            String term = query.getText().toString().trim();
+            if (term.length() < 2) { notice("두 글자 이상 입력해 주세요."); return; }
+            int selected = kind.getSelectedItemPosition();
+            results.removeAllViews();
+            task(() -> api.searchKnowledge(term, kinds[selected]), value -> {
+                if (term.equals(query.getText().toString().trim()) && kind.getSelectedItemPosition() == selected)
+                    displayKnowledge(results, value);
+            });
+        });
+        query.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            public void onTextChanged(CharSequence s, int start, int before, int count) { results.removeAllViews(); }
+            public void afterTextChanged(android.text.Editable s) {}
+        });
+        kind.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            public void onItemSelected(android.widget.AdapterView<?> p, View v, int pos, long id) { results.removeAllViews(); }
+            public void onNothingSelected(android.widget.AdapterView<?> p) {}
+        });
+        page.addView(results);
+    }
+
+    private void displayKnowledge(LinearLayout owner, JSONObject result) {
+        label(owner, result.optString("answer"), 16, INK, 500, 12, 3);
+        var sources = objects(result.optJSONArray("sources"));
+        for (JSONObject source : sources) {
+            if (source.optString("id").equals(result.optString("answerSourceId")))
+                sourceLink(owner, "답변 출처 · " + source.optString("publisher"), source.optString("url"));
+        }
+        label(owner, "자료 수집일 · " + result.optString("asOf"), 13, MUTED, 400, 0, 8);
+        for (JSONObject source : sources) {
+            LinearLayout box = card(owner, true, 12);
+            label(box, source.optString("publisher"), 13, MUTED, 400, 0, 2);
+            sourceLink(box, source.optString("title"), source.optString("url"));
+            if (!source.optString("id").equals(result.optString("answerSourceId")))
+                label(box, source.optString("text"), 14, INK, 400, 1, 4);
+        }
     }
 
     private void diary() {
@@ -1590,7 +1642,7 @@ public final class MainActivity extends Activity {
                 break;
             case "align": case "survey": capture(); break;
             case "optional": survey(); break;
-            case "history": case "my": case "diary": home(); break;
+            case "history": case "my": case "diary": case "knowledge": home(); break;
             case "report": backFromReport(); break;
             case "recommendation": report(currentReport); break;
             default: super.onBackPressed();

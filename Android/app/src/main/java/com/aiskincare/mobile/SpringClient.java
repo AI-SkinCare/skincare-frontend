@@ -140,6 +140,9 @@ final class SpringClient {
 
     void forget() { access = ""; refresh = ""; if (store != null) store.clear(); }
     JSONObject me() throws Exception { return json("GET", "/users/me", true, null); }
+    JSONObject searchKnowledge(String query, String kind) throws Exception {
+        return json("POST", "/knowledge/search", true, new JSONObject().put("query", query).put("kind", kind));
+    }
     void deleteAccount() throws Exception { json("DELETE", "/users/me", true, null); forget(); }
     JSONObject login(String email, String password) throws Exception {
         return json("POST", "/auth/login", false, new JSONObject().put("email", email).put("password", password));

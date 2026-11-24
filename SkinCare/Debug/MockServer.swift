@@ -49,6 +49,12 @@ private enum MockServer {
         let id = parts.count > 1 ? parts[1] : ""
 
         switch route {
+        case "POST knowledge/search":
+            // A fixed example for the in-app demo and UI tests.
+            let text = "사용한 제품과 피부 편안함을 같은 날짜에 기록할 수 있어요."
+            return ok(["kind": "guide", "asOf": "2026-11-24", "origin": "retrieved", "answer": text,
+                       "answerSourceId": "DIARY", "sources": [["id": "DIARY", "title": "피부 일지 점수",
+                       "text": text, "publisher": "SkinCare", "url": "https://github.com/AI-SkinCare/skincare-frontend"]]])
         case "POST auth/login", "POST auth/refresh":
             return ok(authSession)
         case "POST auth/signup":

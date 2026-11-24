@@ -24,6 +24,20 @@ final class MobileFlowUITests: XCTestCase {
     }
 
     @MainActor
+    func testSearchShowsCitedPassage() {
+        let app = launch("home")
+        let open = app.buttons["피부 자료 검색"].firstMatch
+        XCTAssertTrue(open.waitForExistence(timeout: 12))
+        if !open.isHittable { app.swipeUp() }
+        open.tap()
+        let field = app.textFields["성분명이나 질문 입력"]
+        XCTAssertTrue(field.waitForExistence(timeout: 6))
+        field.tap()
+        field.typeText("diary\n")
+        XCTAssertTrue(app.links["답변 출처 · SkinCare"].firstMatch.waitForExistence(timeout: 10))
+    }
+
+    @MainActor
     func testHistoricalIngredientHasLabeledGeneralSource() {
         let app = launch("recommendation")
         let button = app.buttons.containing(NSPredicate(format: "label CONTAINS %@", "세라마이드 근거 보기")).firstMatch
