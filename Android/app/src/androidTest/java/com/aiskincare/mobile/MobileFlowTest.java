@@ -253,6 +253,10 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             await("미국 제품 라벨 · openFDA", 15000);
             onUi(() -> { views(EditText.class).get(0).setText("기차시간표"); click("검색"); });
             await("선택한 자료에서 질문에 맞는 근거를 찾지 못했어요. 성분명이나 다른 검색어로 찾아보세요.", 12000);
+            onUi(() -> { getActivity().onBackPressed(); click("매일 피부 기록"); click("점수 계산 근거"); });
+            await("답변 출처 · SkinCare · 앱 계산 방식", 20000);
+            onUi(() -> getActivity().onBackPressed());
+            await("날짜별 변화", 3000);
         } finally { account.login(email, password); account.deleteAccount(); }
     }
     public void testLocalSpringSideFlow() throws Exception { checkLocalSpringFlow(true); }

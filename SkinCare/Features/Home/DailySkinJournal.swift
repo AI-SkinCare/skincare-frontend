@@ -87,6 +87,7 @@ struct DailySkinJournal: View {
             Section("날짜별 변화") {
                 Text("점수는 내가 느낀 편안함이에요. 이 기기의 내 계정에 저장됩니다.").font(.footnote)
                 Text("변화량은 오늘 입력한 점수에서 직전 기록의 점수를 뺀 값이에요. 사용 제품은 메모로만 보관해요.").font(.footnote)
+                NavigationLink("점수 계산 근거") { SkinKnowledgeView(query: "피부 일지 점수 계산") }
                 if days.isEmpty { Text("첫 기록부터 날짜별로 쌓여요.") }
                 ForEach(Array(days.enumerated()), id: \.element) { index, day in
                     if let entry = entries[day] {

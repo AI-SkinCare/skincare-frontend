@@ -64,6 +64,7 @@ public final class MainActivity extends Activity {
     private String reportBack = "home";
     private int historyPage = 1;
     private JSONObject currentReport;
+    private Runnable knowledgeReturn;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -89,6 +90,7 @@ public final class MainActivity extends Activity {
     }
     private int dp(int v) { return style.dp(v); }
     private void page(String id, String title) {
+        if (!"knowledge".equals(id)) knowledgeReturn = null;
         if (getCurrentFocus() instanceof EditText) {
             getSystemService(InputMethodManager.class).hideSoftInputFromWindow(getCurrentFocus().getWindowToken(), 0);
         }
@@ -451,8 +453,13 @@ public final class MainActivity extends Activity {
     }
 
     private void knowledge() {
+        knowledge("", 0, this::home);
+    }
+
+    private void knowledge(String initial, int initialKind, Runnable back) {
         page("knowledge", null);
-        toolbar("피부 자료 검색", this::home, "홈", null);
+        knowledgeReturn = back;
+        toolbar("피부 자료 검색", back, "뒤로", null);
         Spinner kind = new Spinner(this);
         kind.setContentDescription("자료 종류");
         kind.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
@@ -462,7 +469,7 @@ public final class MainActivity extends Activity {
         query.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(160)});
         LinearLayout results = style.column();
         String[] kinds = {"guide", "research", "label"};
-        button("검색", true, () -> {
+        Button search = button("검색", true, () -> {
             String term = query.getText().toString().trim();
             if (term.length() < 2) { notice("두 글자 이상 입력해 주세요."); return; }
             int selected = kind.getSelectedItemPosition();
@@ -482,6 +489,11 @@ public final class MainActivity extends Activity {
             public void onNothingSelected(android.widget.AdapterView<?> p) {}
         });
         page.addView(results);
+        if (!initial.isEmpty()) {
+            query.setText(initial);
+            kind.setSelection(initialKind);
+            search.post(search::performClick);
+        }
     }
 
     private void displayKnowledge(LinearLayout owner, JSONObject result) {
@@ -536,6 +548,7 @@ public final class MainActivity extends Activity {
         label(page, "날짜별 변화", 20, INK, 700, 15, 3);
         label(page, "점수는 내가 느낀 편안함이에요. 이 기기의 내 계정에 저장됩니다.", 14, MUTED, 400, 0, 9);
         label(page, "변화량은 오늘 입력한 점수에서 직전 기록의 점수를 뺀 값이에요. 사용 제품은 메모로만 보관해요.", 14, MUTED, 400, 0, 6);
+        page.addView(link("점수 계산 근거", () -> knowledge("피부 일지 점수 계산", 0, this::diary)));
         if (entries.isEmpty()) label(page, "첫 기록부터 날짜별로 쌓여요.", 15, MUTED, 400, 6, 10);
         for (var item : entries.entrySet()) {
             JSONObject entry = item.getValue();
@@ -1436,6 +1449,8 @@ public final class MainActivity extends Activity {
     private void recommendation(JSONObject value, boolean evening) {
         if (!showRecommendation(value)) return;
         page("recommendation", null);
+        currentReport = value;
+        Runnable backToRecommendation = () -> recommendation(value, evening);
         toolbar("맞춤 추천", () -> report(value), "분석 결과로", null);
         JSONObject rec = value.optJSONObject("recommendation");
         String source = sourceNotice(value);
@@ -1460,7 +1475,8 @@ public final class MainActivity extends Activity {
                 LinearLayout box = card(page, true, 12);
                 numberedRow(box, i + 1, item.optString("name"),
                         item.isNull("purpose") ? "" : item.optString("purpose"), SOFT);
-                ingredientEvidence(box, item, sourceLinked, guides);
+                LinearLayout detail = ingredientEvidence(box, item, sourceLinked, guides);
+                detail.addView(link("이 성분의 연구 문헌", () -> knowledge(item.optString("name"), 1, backToRecommendation)));
             }
         } else label(page, "맞춤 성분을 찾지 못했어요. 추천 이유를 확인해 주세요.", 14, MUTED, 400, 0, 7);
         List<JSONObject> steps = objects(rec.optJSONArray("routine"));
@@ -1490,7 +1506,7 @@ public final class MainActivity extends Activity {
                 for (String action : other.get(title)) label(card, action, 15, INK, 400, 5, 3);
             }
         }
-        careCards(value, ingredients, guides);
+        careCards(value, ingredients, guides, backToRecommendation);
         JSONArray reasoning = rec.optJSONArray("reasoning");
         if (reasoning != null && reasoning.length() > 0) lines(disclosure(page, "추천 이유"), reasoning);
         JSONArray notes = rec.optJSONArray("inputNotes");
@@ -1505,7 +1521,7 @@ public final class MainActivity extends Activity {
         } catch (IllegalArgumentException malformed) { return false; }
     }
 
-    private void ingredientEvidence(LinearLayout box, JSONObject item, boolean sourceLinked, CareGuide guides) {
+    private LinearLayout ingredientEvidence(LinearLayout box, JSONObject item, boolean sourceLinked, CareGuide guides) {
         String name = item.optString("name");
         LinearLayout detail = disclosure(box, name + " 근거 보기");
         JSONObject evidence = item.optJSONObject("evidence");
@@ -1522,7 +1538,7 @@ public final class MainActivity extends Activity {
                 label(detail, "근거의 한계", 14, INK, 600, 3, 2);
                 label(detail, evidence.optString("limitations"), 14, MUTED, 400, 2, 5);
                 for (JSONObject s : sources) citation(detail, s);
-                return;
+                return detail;
             }
         }
         label(detail, "이 결과에는 성분별 출처가 저장되어 있지 않아요.", 14, MUTED, 400, 3, 3);
@@ -1531,6 +1547,7 @@ public final class MainActivity extends Activity {
             label(detail, "일반 참고자료", 14, INK, 600, 3, 2);
             citation(detail, general);
         }
+        return detail;
     }
 
     private void citation(LinearLayout detail, JSONObject source) {
@@ -1546,7 +1563,7 @@ public final class MainActivity extends Activity {
         }));
     }
 
-    private void careCards(JSONObject value, JSONArray ingredients, CareGuide guides) {
+    private void careCards(JSONObject value, JSONArray ingredients, CareGuide guides, Runnable back) {
         JSONObject disease = value.optJSONObject("disease");
         if (disease == null || disease.optBoolean("uncertain", true)) return;
         String name = disease.optString("label");
@@ -1562,6 +1579,8 @@ public final class MainActivity extends Activity {
                     : "사진의 ‘" + name + "’ 분류에 연결한 자료예요." + (section.equals("diet") ? " 설문에는 식사 기록이 없어요." : "");
             label(box, reason, 14, MUTED, 400, 0, 3);
             sourceLink(box, general ? "세계보건기구 자료" : "미국피부과학회 자료", item.optString("source"));
+            if (section.equals("diet")) box.addView(link("식습관 자료 더 보기",
+                    () -> knowledge(general ? "균형 식단" : name + " 식습관", 0, back)));
         }
         JSONObject survey = value.optJSONObject("survey");
         JSONArray avoid = survey == null ? null : survey.optJSONArray("avoidIngredients");
@@ -1581,6 +1600,7 @@ public final class MainActivity extends Activity {
             label(box, avoided.isEmpty() ? "설문에 등록한 회피 성분이 없어요." : "성분표에서 제외를 확인한 설문 성분 · " + String.join(", ", avoided), 14, MUTED, 400, 1, 2);
             label(box, product.optString("category") + " · 구매 전 국내 포장의 전성분을 확인해 주세요.", 14, MUTED, 400, 0, 3);
             sourceLink(box, "제조사 성분표", product.optString("source"));
+            box.addView(link("제품 라벨 검색", () -> knowledge(product.optString("name"), 2, back)));
         }
     }
 
@@ -1642,7 +1662,8 @@ public final class MainActivity extends Activity {
                 break;
             case "align": case "survey": capture(); break;
             case "optional": survey(); break;
-            case "history": case "my": case "diary": case "knowledge": home(); break;
+            case "knowledge": if (knowledgeReturn != null) knowledgeReturn.run(); else home(); break;
+            case "history": case "my": case "diary": home(); break;
             case "report": backFromReport(); break;
             case "recommendation": report(currentReport); break;
             default: super.onBackPressed();

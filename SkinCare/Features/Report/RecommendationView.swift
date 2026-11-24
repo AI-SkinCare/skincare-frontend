@@ -139,6 +139,9 @@ private struct IngredientsSection: View {
                                         source(item)
                                     }
                                 }
+                                NavigationLink("이 성분의 연구 문헌") {
+                                    SkinKnowledgeView(query: ingredient.name, kind: "research")
+                                }
                             }.font(.footnote).frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }

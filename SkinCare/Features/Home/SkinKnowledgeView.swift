@@ -7,6 +7,13 @@ struct SkinKnowledgeView: View {
     @State private var result: KnowledgeResult?
     @State private var failure: String?
     @State private var loading = false
+    private let initialQuery: String
+
+    init(query: String = "", kind: String = "guide") {
+        initialQuery = query
+        _query = State(initialValue: query)
+        _kind = State(initialValue: kind)
+    }
 
     var body: some View {
         List {
@@ -43,6 +50,7 @@ struct SkinKnowledgeView: View {
             }
         }
         .navigationTitle("피부 자료 검색")
+        .task { if !initialQuery.isEmpty && result == nil { await search() } }
         .onChange(of: kind) { _, _ in result = nil; failure = nil }
         .onChange(of: query) { _, _ in result = nil; failure = nil }
     }

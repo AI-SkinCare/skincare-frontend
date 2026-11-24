@@ -12,6 +12,9 @@ struct CareGuideSection: View {
                 } else if let general = catalog.diet["general"] {
                     card("식습관 메모", general, reason: "이 분류에는 별도의 식습관 자료가 없어 일반 식생활 지침을 표시해요.", source: "세계보건기구 자료")
                 }
+                NavigationLink("식습관 자료 더 보기") {
+                    SkinKnowledgeView(query: catalog.diet[analysis.disease.label] == nil ? "균형 식단" : analysis.disease.label + " 식습관")
+                }
                 Text("추천 성분이 든 제품 예시").appText(.title)
                 let names = analysis.recommendation?.ingredients?.map(\.name) ?? []
                 let matches = catalog.matched(names, avoiding: analysis.survey?.avoidIngredients)
@@ -29,6 +32,7 @@ struct CareGuideSection: View {
                         }
                         Text(product.category + " · 구매 전 국내 포장의 전성분을 확인해 주세요.")
                         Link("제조사 성분표", destination: product.source)
+                        NavigationLink("제품 라벨 검색") { SkinKnowledgeView(query: product.name, kind: "label") }
                     }
                 }
             }
