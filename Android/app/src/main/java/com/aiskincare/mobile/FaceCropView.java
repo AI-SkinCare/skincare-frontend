@@ -9,7 +9,7 @@ import com.google.mlkit.vision.face.Face;
 
 /** The drawn guide, validation, and crop all use the same upright image coordinates. */
 final class FaceCropView extends View {
-    private final Photo photo;
+    private final Bitmap photo;
     private final Face face;
     private final boolean side;
     private final java.util.function.Consumer<Boolean> readiness;
@@ -17,7 +17,7 @@ final class FaceCropView extends View {
     private final ScaleGestureDetector pinch;
     private float scale, base, x, y, lastX, lastY;
 
-    FaceCropView(Context context, Photo photo, Face face, boolean side, java.util.function.Consumer<Boolean> readiness) {
+    FaceCropView(Context context, Bitmap photo, Face face, boolean side, java.util.function.Consumer<Boolean> readiness) {
         super(context); this.photo=photo; this.face=face; this.side=side; this.readiness=readiness;
         setContentDescription("얼굴 위치 조정. 사진을 이동하거나 두 손가락으로 크기를 조절하세요.");
         pinch=new ScaleGestureDetector(context,new ScaleGestureDetector.SimpleOnScaleGestureListener(){
@@ -40,10 +40,10 @@ final class FaceCropView extends View {
         r.offset(-x,-y);
         Rect crop=new Rect((int)Math.floor(r.left/scale),(int)Math.floor(r.top/scale),
                 (int)Math.ceil(r.right/scale),(int)Math.ceil(r.bottom/scale));
-        if (!crop.intersect(0,0,photo.preview.getWidth(),photo.preview.getHeight())) crop.setEmpty();
+        if (!crop.intersect(0,0,photo.getWidth(),photo.getHeight())) crop.setEmpty();
         return crop;
     }
-    Bitmap crop(){ Rect r=cropRect(); return Bitmap.createBitmap(photo.preview,r.left,r.top,r.width(),r.height()); }
+    Bitmap crop(){ Rect r=cropRect(); return Bitmap.createBitmap(photo,r.left,r.top,r.width(),r.height()); }
     private void changed(){
         RectF box=new RectF(face.getBoundingBox()); box.set(x+box.left*scale,y+box.top*scale,x+box.right*scale,y+box.bottom*scale);
         Rect crop=cropRect();
@@ -53,7 +53,7 @@ final class FaceCropView extends View {
     }
     @Override protected void onDraw(Canvas canvas){
         canvas.drawColor(Color.BLACK); paint.setStyle(Paint.Style.FILL);
-        canvas.drawBitmap(photo.preview,null,new RectF(x,y,x+scale*photo.preview.getWidth(),y+scale*photo.preview.getHeight()),paint);
+        canvas.drawBitmap(photo,null,new RectF(x,y,x+scale*photo.getWidth(),y+scale*photo.getHeight()),paint);
         paint.setColor(Color.WHITE); paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(4);
         canvas.drawOval(FaceFrame.guide(getWidth(),getHeight()),paint);
     }

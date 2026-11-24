@@ -69,6 +69,11 @@ private enum FlowFailure: Error { case check(String) }
                 try raw.write(to: URL(fileURLWithPath: input.outputDirectory).appending(path: "\(item.name)-response.json"))
                 try require(!analysis.status.isInProgress, "poll deadline")
                 try require(analysis.disease == initial, "classification changed while polling")
+                if let view = item.survey.captureView {
+                    try require(analysis.survey?.captureView == view, "saved capture view differs")
+                    let expected = view == "side" ? "dinov2_linear_" : "densenet121"
+                    try require(analysis.disease.modelVersion?.hasPrefix(expected) == true, "wrong classification model for capture view")
+                }
                 try require(analysis.disease.explanation?.heatmapData(for: analysis.disease) != nil,
                             "validated Grad-CAM missing from saved classification")
                 try require(analysis.error == nil, "analysis failed")

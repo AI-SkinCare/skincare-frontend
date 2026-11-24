@@ -11,15 +11,15 @@ final class Photo {
     private Photo(Bitmap preview, byte[] jpeg) { this.preview = preview; this.jpeg = jpeg; }
 
     // Run on the photo worker after EXIF orientation correction, before advancing to the survey.
-    com.google.mlkit.vision.face.Face face(boolean side) throws Exception {
+    static com.google.mlkit.vision.face.Face face(Bitmap preview, boolean side) throws Exception {
         var options = new com.google.mlkit.vision.face.FaceDetectorOptions.Builder()
                 .setPerformanceMode(com.google.mlkit.vision.face.FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
                 .build();
         try (var detector = com.google.mlkit.vision.face.FaceDetection.getClient(options)) {
             var image = com.google.mlkit.vision.common.InputImage.fromBitmap(preview, 0);
             var faces = com.google.android.gms.tasks.Tasks.await(detector.process(image));
-            if (faces.size() != 1 || faces.get(0).getBoundingBox().width() < preview.getWidth() * .18f)
-                throw new IllegalArgumentException("한 사람의 얼굴 전체와 한쪽 볼이 보이게 다시 찍어 주세요.");
+            if (faces.size() != 1)
+                throw new IllegalArgumentException("한 사람의 얼굴 전체가 보이게 다시 찍어 주세요.");
             if (side && Math.abs(faces.get(0).getHeadEulerAngleY()) < 20)
                 throw new IllegalArgumentException("정면에 가까운 사진이에요. 측면 모드에서는 얼굴을 한쪽으로 조금 더 돌려 주세요.");
             if (!side && Math.abs(faces.get(0).getHeadEulerAngleY()) > 20)
@@ -27,7 +27,10 @@ final class Photo {
             return faces.get(0);
         }
     }
-    void requireSideFace() throws Exception { face(true); }
+    void requireSideFace() throws Exception {
+        if (face(preview,true).getBoundingBox().width()<preview.getWidth()*.18f)
+            throw new IllegalArgumentException("한 사람의 얼굴 전체와 한쪽 볼이 보이게 다시 찍어 주세요.");
+    }
 
     void requireOneFace() {
         float ratio=Math.min(1f,640f/Math.max(preview.getWidth(),preview.getHeight()));
@@ -45,10 +48,13 @@ final class Photo {
     }
 
     static Photo decode(ImageDecoder.Source source) throws IOException {
+        return encode(read(source, 1600));
+    }
+    static Bitmap read(ImageDecoder.Source source, int maxSide) throws IOException {
         Bitmap image = ImageDecoder.decodeBitmap(source, (decoder, info, ignored) -> {
             int w = info.getSize().getWidth(), h = info.getSize().getHeight();
             if (Math.min(w, h) < 720) throw new IllegalArgumentException("짧은 변이 720픽셀 이상인 사진을 골라 주세요.");
-            float scale = Math.min(1f, 1600f / Math.max(w, h));
+            float scale = Math.min(1f, (float)maxSide / Math.max(w, h));
             decoder.setTargetSize(Math.max(1, Math.round(w * scale)), Math.max(1, Math.round(h * scale)));
             decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE);
         });
@@ -64,9 +70,11 @@ final class Photo {
             if(hi-lo>2) { uniform=false; break; }
         }
         if(uniform) throw new IllegalArgumentException("사진 전체가 단색에 가까워요. 얼굴과 주변이 보이게 다시 찍어 주세요.");
-        return encode(image);
+        return image;
     }
     static Photo encode(Bitmap image) throws IOException {
+        float scale=Math.min(1f,1600f/Math.max(image.getWidth(),image.getHeight()));
+        if (scale<1) image=Bitmap.createScaledBitmap(image,Math.round(image.getWidth()*scale),Math.round(image.getHeight()*scale),true);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         if (!image.compress(Bitmap.CompressFormat.JPEG, 90, out) || out.size() > 10 * 1024 * 1024)
             throw new IOException("사진을 업로드 크기로 변환하지 못했어요.");

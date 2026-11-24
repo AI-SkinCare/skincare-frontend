@@ -278,6 +278,14 @@ public final class MainActivity extends Activity {
                 main.post(() -> {
                     if (owner != version || isDestroyed()) return;
                     busy = false; ownerPage.removeView(progress);
+                    if ("optional".equals(screen) && ex instanceof SpringClient.Failure failure
+                            && ("E2001".equals(failure.code) || "E2002".equals(failure.code))) {
+                        photo=null;
+                        capture();
+                        notice("E2001".equals(failure.code) ? "한 사람의 얼굴 전체가 보이게 다시 찍어 주세요."
+                                : "밝은 곳에서 선명하게 다시 찍어 주세요.");
+                        return;
+                    }
                     boolean expired = ex instanceof SpringClient.Failure && ((SpringClient.Failure) ex).status == 401;
                     if (expired && !"login".equals(screen)) { reset(); auth(false); }
                     String message = ex instanceof SpringClient.Failure || ex instanceof IllegalArgumentException
@@ -822,7 +830,7 @@ public final class MainActivity extends Activity {
         if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.CAMERA}, 21); return;
         }
-        camera = new CaptureDialog(this, rear, side, bytes -> decode(ImageDecoder.createSource(ByteBuffer.wrap(bytes))), this::notice);
+        camera = new CaptureDialog(this, rear, side, bytes -> decode(ImageDecoder.createSource(ByteBuffer.wrap(bytes)), !rear), this::notice);
         camera.show();
     }
     @Override public void onRequestPermissionsResult(int req, String[] p, int[] results) {
@@ -834,14 +842,19 @@ public final class MainActivity extends Activity {
     @Override protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req,res,data);
         if (req == 20 && res == RESULT_OK && data != null && data.getData() != null)
-            decode(ImageDecoder.createSource(getContentResolver(), data.getData()));
+            decode(ImageDecoder.createSource(getContentResolver(), data.getData()), false);
     }
-    private void decode(ImageDecoder.Source source) {
+    private void decode(ImageDecoder.Source source, boolean mirror) {
         photo=null; capture();
         boolean sideView = side;
         task(() -> {
-            Photo selected=Photo.decode(source);
-            return android.util.Pair.create(selected, selected.face(sideView));
+            android.graphics.Bitmap selected=Photo.read(source,3000);
+            if (mirror) {
+                android.graphics.Matrix transform=new android.graphics.Matrix();
+                transform.setScale(-1,1);
+                selected=android.graphics.Bitmap.createBitmap(selected,0,0,selected.getWidth(),selected.getHeight(),transform,true);
+            }
+            return android.util.Pair.create(selected, Photo.face(selected,sideView));
         }, pair -> {
             page("align", null);
             toolbar("", this::capture, "사진으로 돌아가기", this::closeCapture);
@@ -1173,7 +1186,13 @@ public final class MainActivity extends Activity {
             default: return "상태 확인 필요";
         }
     }
-    void openReport(JSONObject value) { pollStart=SystemClock.elapsedRealtime(); report(value); }
+    void openReport(JSONObject value) {
+        long age=0;
+        try { age=Math.max(0,System.currentTimeMillis()-OffsetDateTime.parse(value.getString("createdAt")).toInstant().toEpochMilli()); }
+        catch (org.json.JSONException | java.time.format.DateTimeParseException missingTime) { /* Use time of opening for legacy records. */ }
+        pollStart=SystemClock.elapsedRealtime()-age;
+        report(value);
+    }
     static boolean showRecommendation(JSONObject r) {
         JSONObject meta=r.optJSONObject("generation");
         return "COMPLETED".equals(r.optString("status")) && "generated".equals(r.optString("recommendationStatus"))

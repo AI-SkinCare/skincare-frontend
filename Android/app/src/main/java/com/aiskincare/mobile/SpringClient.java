@@ -36,7 +36,9 @@ final class SpringClient {
 
     static class Failure extends IOException {
         final int status;
-        Failure(int status, String message) { super(message); this.status = status; }
+        final String code;
+        Failure(int status, String message) { this(status, "", message); }
+        Failure(int status, String code, String message) { super(message); this.status = status; this.code = code; }
     }
 
     interface Body { void write(OutputStream out) throws Exception; }
@@ -79,11 +81,12 @@ final class SpringClient {
             if (status == 204) return new JSONObject();
             if (status < 200 || status >= 300) {
                 String message = "서버 요청을 완료하지 못했어요. (" + status + ")";
+                String code = "";
                 try (InputStream in = connection.getErrorStream()) {
                     JSONObject error = new JSONObject(read(in)).optJSONObject("error");
-                    if (error != null) message = error.optString("message", message);
+                    if (error != null) { message = error.optString("message", message); code = error.optString("code"); }
                 } catch (Exception ignored) { /* An upstream proxy may send HTML. */ }
-                throw new Failure(status, message);
+                throw new Failure(status, code, message);
             }
             try (InputStream in = connection.getInputStream()) {
                 JSONObject data = new JSONObject(read(in)).getJSONObject("data");

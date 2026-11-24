@@ -21,6 +21,36 @@ import java.util.concurrent.atomic.AtomicReference;
 @SuppressWarnings("deprecation")
 public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainActivity> {
     public MobileFlowTest() { super(MainActivity.class); }
+    public void testNewSurveyUsesPreviousBasicsAndClearsReportedSymptoms() throws Exception {
+        MainActivity app=getActivity();
+        var prior=new JSONObject().put("gender","female").put("ageBand","30s").put("skinType","dry")
+                .put("captureView","side").put("sleepHours",7).put("concerns",new org.json.JSONArray().put("dryness"))
+                .put("avoidIngredients",new org.json.JSONArray().put("향료"))
+                .put("symptomProfile",new JSONObject().put("itch","occasional"));
+        var defaults=MainActivity.class.getDeclaredMethod("applyDefaults",JSONObject.class);
+        var open=MainActivity.class.getDeclaredMethod("survey");
+        defaults.setAccessible(true); open.setAccessible(true);
+        onUi(()->{
+            try { defaults.invoke(app,prior); open.invoke(app); }
+            catch (ReflectiveOperationException error) { throw new AssertionError(error); }
+            assertTrue(button("여성").isSelected()); assertTrue(button("건성").isSelected());
+            click("다음");
+            assertTrue(button("건조·각질").isSelected()); assertFalse(button("가끔").isSelected());
+            assertTrue(button("분석 시작").isEnabled());
+        });
+        assertTrue(hasText("7")); assertTrue(hasText("향료"));
+    }
+
+    public void testFramingGateChecksBothSidesAndDistance() {
+        android.graphics.RectF guide=new android.graphics.RectF(0,0,300,400);
+        android.graphics.RectF face=new android.graphics.RectF(60,80,240,320);
+        assertTrue(FaceFrame.aligned(face,guide,45,0,true));
+        assertTrue(FaceFrame.aligned(face,guide,-45,0,true));
+        assertFalse(FaceFrame.aligned(face,guide,0,0,true));
+        assertFalse(FaceFrame.aligned(face,guide,45,0,false));
+        face.offset(90,0);
+        assertFalse(FaceFrame.aligned(face,guide,45,0,true));
+    }
     public void testSharedSideResultShowsUntimedCare() throws Exception {
         JSONObject item;
         try (var stream = getInstrumentation().getContext().getAssets().open("parity-side-result.json");
