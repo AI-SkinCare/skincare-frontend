@@ -58,6 +58,9 @@ public final class MainActivity extends Activity {
     private String nickname = "", email = "";
     private JSONObject draft = new JSONObject();
     private final java.util.Map<String, String> draftText = new java.util.HashMap<>();
+    private final java.util.Set<String> unsure = new java.util.HashSet<>();
+    private final java.util.Map<String, Button> unsureButtons = new java.util.HashMap<>();
+    private Button submitSurvey;
     private String reportBack = "home";
     private int historyPage = 1;
     private JSONObject currentReport;
@@ -743,6 +746,10 @@ public final class MainActivity extends Activity {
                 draftText.put(key.equals("currentProducts") ? "products" : "avoid", listText(items));
             }
         }
+        for (String key : new String[]{"skinType","waterIntakeLevel","sunExposureLevel","stressLevel","concerns"})
+            if (!draft.has(key)) unsure.add(key);
+        if (!draftText.containsKey("sleep")) unsure.add("sleep");
+        if (!draftText.containsKey("products")) unsure.add("products");
     }
 
     private void copyChoice(JSONObject previous, String key, String... allowed) {
@@ -804,6 +811,9 @@ public final class MainActivity extends Activity {
         loadedDefaults = false;
         draft = new JSONObject();
         draftText.clear();
+        unsure.clear();
+        unsureButtons.clear();
+        submitSurvey = null;
     }
 
     private void reset() { clearCapture(); nickname = ""; email = ""; userId = 0; }
@@ -831,9 +841,20 @@ public final class MainActivity extends Activity {
         boolean sideView = side;
         task(() -> {
             Photo selected=Photo.decode(source);
-            if (sideView) selected.requireSideFace(); else selected.requireOneFace();
-            return selected;
-        }, selected -> { photo = selected; capture(); });
+            return android.util.Pair.create(selected, selected.face(sideView));
+        }, pair -> {
+            page("align", null);
+            toolbar("", this::capture, "사진으로 돌아가기", this::closeCapture);
+            hero("얼굴 위치 맞추기", "사진을 이동하거나 확대해 얼굴을 타원 안에 맞춰 주세요.");
+            Button confirm=footer("이 사진 사용", () -> {});
+            style.primary(confirm,false);
+            FaceCropView framing=new FaceCropView(this,pair.first,pair.second,sideView,ok->style.primary(confirm,ok));
+            page.addView(framing,-1,dp(420));
+            confirm.setOnClickListener(v -> {
+                android.graphics.Bitmap cropped=framing.crop();
+                task(()->Photo.encode(cropped), selected->{ photo=selected; capture(); });
+            });
+        });
     }
     private static void put(JSONObject o, String key, Object value) {
         try { o.put(key, value); } catch (org.json.JSONException e) { throw new IllegalArgumentException(key, e); }
@@ -881,15 +902,18 @@ public final class MainActivity extends Activity {
         for (int i = 0; i < labels.length; i++) {
             Button chip = chip(labels[i]);
             Object value = values[i];
-            selectChip(chip, java.util.Objects.equals(target.opt(key), value));
+            if (value == null) chip.setContentDescription(title + " · 잘 모르겠어요");
+            selectChip(chip, value == null ? unsure.contains(key) : java.util.Objects.equals(target.opt(key), value));
             chips.add(chip);
             chip.setOnClickListener(view -> {
                 if (busy) return;
+                if (value == null) unsure.add(key); else unsure.remove(key);
                 if (value == null || (!required && chip.isSelected())) target.remove(key);
                 else put(target, key, value);
                 for (int j = 0; j < chips.size(); j++)
-                    selectChip(chips.get(j), java.util.Objects.equals(target.opt(key), values[j]));
+                    selectChip(chips.get(j), values[j] == null ? unsure.contains(key) : java.util.Objects.equals(target.opt(key), values[j]));
                 if (changed != null) changed.run();
+                refreshSurveyButton();
             });
         }
         placeChips(chips, columns);
@@ -920,6 +944,7 @@ public final class MainActivity extends Activity {
                 selectChip(chip, !wasSelected);
                 if (selection.length() == 0) target.remove(key);
                 else put(target, key, selection);
+                if (target == draft) { clearUnsure(key); refreshSurveyButton(); }
             });
         }
         placeChips(chips, columns);
@@ -931,7 +956,8 @@ public final class MainActivity extends Activity {
         stepIndicator(true);
         hero("기본 정보를 알려 주세요.", "추천 성분을 고르는 데 쓰여요.");
         Button next = footer("다음", this::optionalSurvey);
-        Runnable update = () -> style.primary(next, draft.has("gender") && draft.has("ageBand"));
+        Runnable update = () -> style.primary(next, draft.has("gender") && draft.has("ageBand")
+                && (draft.has("skinType") || unsure.contains("skinType")));
         choices(draft, "gender", "성별", true, 2, new String[]{"여성", "남성"},
                 new Object[]{"female", "male"}, update);
         choices(draft, "ageBand", "연령대", true, 4, new String[]{"10대","20대","30대","40대","50대","60대","70대"},
@@ -949,6 +975,8 @@ public final class MainActivity extends Activity {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
                 draftText.put(key, s.toString());
+                if (!s.toString().trim().isEmpty()) clearUnsure(key);
+                refreshSurveyButton();
             }
             @Override public void afterTextChanged(android.text.Editable edit) {}
         });
@@ -959,7 +987,8 @@ public final class MainActivity extends Activity {
         page("optional", null);
         toolbar("", this::survey, "이전 단계", this::closeCapture);
         stepIndicator(true);
-        hero("피부 상태와 생활 습관", "모두 선택 사항이에요. 답하지 않아도 분석할 수 있어요.");
+        hero("피부 상태와 생활 습관", "생활 습관에는 답하거나 ‘잘 모르겠어요’를 골라 주세요. 최근 증상과 회피 성분은 선택 사항이에요.");
+        unsureButtons.clear();
         label(page, "최근 피부 상태", 20, INK, 700, 2, 3);
         label(page, "이번 촬영의 자가 응답으로 기록해요. 현재 이미지 분류에는 사진만 사용해요.",
                 14, MUTED, 400, 0, 9);
@@ -983,17 +1012,49 @@ public final class MainActivity extends Activity {
                 new String[]{"forehead","hairline_scalp","eyebrows","around_nose","cheeks","jaw_chin"});
         label(page, "생활 습관", 20, INK, 700, 13, 3);
         EditText hours = draftField("sleep", "하루 수면 시간", "0~14시간", InputType.TYPE_CLASS_NUMBER);
-        Object[] levels = {"low","medium","high"};
-        choices(draft, "waterIntakeLevel", "물 섭취량", false, 3, new String[]{"적음","보통","많음"}, levels, null);
-        choices(draft, "sunExposureLevel", "햇빛 노출", false, 3, new String[]{"낮음","보통","높음"}, levels, null);
-        choices(draft, "stressLevel", "스트레스", false, 3, new String[]{"낮음","보통","높음"}, levels, null);
+        unsureOption("sleep", "수면 시간", hours);
+        Object[] levels = {"low","medium","high",null};
+        choices(draft, "waterIntakeLevel", "물 섭취량", false, 4, new String[]{"적음","보통","많음","잘 모르겠어요"}, levels, null);
+        choices(draft, "sunExposureLevel", "햇빛 노출", false, 4, new String[]{"낮음","보통","높음","잘 모르겠어요"}, levels, null);
+        choices(draft, "stressLevel", "스트레스", false, 4, new String[]{"낮음","보통","높음","잘 모르겠어요"}, levels, null);
         multi(draft, "concerns", "피부 고민", "최대 3개 · 정상으로 분류되면 여기서 고른 고민을 바탕으로 추천해요.", 3, 3,
                 new String[]{"피부 톤·잡티","모공","주름","트러블","붉은기","건조·각질","탄력","민감함"},
                 new String[]{"pigmentation","pore","wrinkle","acne","redness","dryness","sagging","sensitivity"});
+        unsureOption("concerns", "피부 고민", null);
         EditText avoid = draftField("avoid", "피하고 싶은 성분", "쉼표로 구분", InputType.TYPE_CLASS_TEXT);
         EditText products = draftField("products", "사용 중인 제품", "최대 5개 · 쉼표로 구분", InputType.TYPE_CLASS_TEXT);
+        unsureOption("products", "사용 중인 제품", products);
         EditText note = draftField("note", "추가로 알려 주실 내용", "예: 여름에 번들거림이 심해요", InputType.TYPE_CLASS_TEXT);
-        footer("분석 시작", () -> submit(avoid, hours, products, note));
+        submitSurvey = footer("분석 시작", () -> submit(avoid, hours, products, note));
+        refreshSurveyButton();
+    }
+
+    private void clearUnsure(String key) {
+        unsure.remove(key);
+        Button choice = unsureButtons.get(key);
+        if (choice != null) selectChip(choice, false);
+    }
+    private void unsureOption(String key, String title, EditText field) {
+        Button option = chip("잘 모르겠어요");
+        option.setContentDescription(title + " · 잘 모르겠어요");
+        selectChip(option, unsure.contains(key));
+        unsureButtons.put(key, option);
+        page.addView(option);
+        option.setOnClickListener(v -> {
+            if (unsure.contains(key)) { clearUnsure(key); refreshSurveyButton(); return; }
+            unsure.add(key);
+            if (field != null) field.setText("");
+            if (key.equals("concerns")) { draft.remove(key); optionalSurvey(); return; }
+            selectChip(option, true);
+            refreshSurveyButton();
+        });
+    }
+    private void refreshSurveyButton() {
+        if (!"optional".equals(screen) || submitSurvey == null) return;
+        boolean ready = true;
+        for (String key : new String[]{"sleep","products","waterIntakeLevel","sunExposureLevel","stressLevel","concerns"})
+            if (!unsure.contains(key) && !draft.has(key) && draftText.getOrDefault(key, "").trim().isEmpty()) ready = false;
+        style.primary(submitSurvey, ready);
     }
 
     private JSONArray commaSeparated(EditText input, String key, int count, int length, String error) {
@@ -1446,7 +1507,7 @@ public final class MainActivity extends Activity {
                 if (getPreferences(MODE_PRIVATE).getBoolean("hideGuide", false)) closeCapture();
                 else guide();
                 break;
-            case "survey": capture(); break;
+            case "align": case "survey": capture(); break;
             case "optional": survey(); break;
             case "history": case "my": case "diary": home(); break;
             case "report": backFromReport(); break;

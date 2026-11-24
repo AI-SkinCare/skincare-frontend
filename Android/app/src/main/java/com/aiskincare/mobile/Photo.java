@@ -11,7 +11,7 @@ final class Photo {
     private Photo(Bitmap preview, byte[] jpeg) { this.preview = preview; this.jpeg = jpeg; }
 
     // Run on the photo worker after EXIF orientation correction, before advancing to the survey.
-    void requireSideFace() throws Exception {
+    com.google.mlkit.vision.face.Face face(boolean side) throws Exception {
         var options = new com.google.mlkit.vision.face.FaceDetectorOptions.Builder()
                 .setPerformanceMode(com.google.mlkit.vision.face.FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
                 .build();
@@ -20,10 +20,14 @@ final class Photo {
             var faces = com.google.android.gms.tasks.Tasks.await(detector.process(image));
             if (faces.size() != 1 || faces.get(0).getBoundingBox().width() < preview.getWidth() * .18f)
                 throw new IllegalArgumentException("한 사람의 얼굴 전체와 한쪽 볼이 보이게 다시 찍어 주세요.");
-            if (Math.abs(faces.get(0).getHeadEulerAngleY()) < 20)
+            if (side && Math.abs(faces.get(0).getHeadEulerAngleY()) < 20)
                 throw new IllegalArgumentException("정면에 가까운 사진이에요. 측면 모드에서는 얼굴을 한쪽으로 조금 더 돌려 주세요.");
+            if (!side && Math.abs(faces.get(0).getHeadEulerAngleY()) > 20)
+                throw new IllegalArgumentException("정면 모드에서는 얼굴을 정면으로 맞춰 주세요.");
+            return faces.get(0);
         }
     }
+    void requireSideFace() throws Exception { face(true); }
 
     void requireOneFace() {
         float ratio=Math.min(1f,640f/Math.max(preview.getWidth(),preview.getHeight()));
@@ -60,6 +64,9 @@ final class Photo {
             if(hi-lo>2) { uniform=false; break; }
         }
         if(uniform) throw new IllegalArgumentException("사진 전체가 단색에 가까워요. 얼굴과 주변이 보이게 다시 찍어 주세요.");
+        return encode(image);
+    }
+    static Photo encode(Bitmap image) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         if (!image.compress(Bitmap.CompressFormat.JPEG, 90, out) || out.size() > 10 * 1024 * 1024)
             throw new IOException("사진을 업로드 크기로 변환하지 못했어요.");

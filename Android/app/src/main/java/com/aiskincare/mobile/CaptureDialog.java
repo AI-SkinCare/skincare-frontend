@@ -7,6 +7,12 @@ import android.graphics.Color;
 import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.RectF;
+import android.os.SystemClock;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.face.FaceDetection;
+import com.google.mlkit.vision.face.FaceDetector;
+import com.google.mlkit.vision.face.FaceDetectorOptions;
 import android.hardware.Camera;
 import android.view.Gravity;
 import android.view.SurfaceHolder;
@@ -30,6 +36,10 @@ final class CaptureDialog extends Dialog implements SurfaceHolder.Callback {
     private final SurfaceView preview;
     private final Button shutter;
     private Camera camera;
+    private final boolean side;
+    private FaceDetector detector;
+    private boolean processing, capturing;
+    private long alignedSince, lastReady, lastFrame;
     private int cameraId = -1;
 
     CaptureDialog(Activity host, boolean rear, Consumer<byte[]> onPhoto, Consumer<String> onError) {
@@ -39,6 +49,7 @@ final class CaptureDialog extends Dialog implements SurfaceHolder.Callback {
     CaptureDialog(Activity host, boolean rear, boolean side, Consumer<byte[]> onPhoto, Consumer<String> onError) {
         super(host, android.R.style.Theme_Material_NoActionBar_Fullscreen);
         this.host = host;
+        this.side = side;
         this.facing = rear ? Camera.CameraInfo.CAMERA_FACING_BACK : Camera.CameraInfo.CAMERA_FACING_FRONT;
         this.onPhoto = onPhoto;
         this.onError = onError;
@@ -52,12 +63,11 @@ final class CaptureDialog extends Dialog implements SurfaceHolder.Callback {
             final Paint pen = new Paint(Paint.ANTI_ALIAS_FLAG);
             final Path mask = new Path();
             @Override protected void onDraw(Canvas canvas) {
-                float w = Math.min(getWidth() * .66f, getHeight() * .48f), h = w * 1.32f;
-                float x = getWidth() / 2f, y = getHeight() / 2f;
+                RectF oval = FaceFrame.guide(getWidth(),getHeight());
                 mask.reset();
                 mask.setFillType(Path.FillType.EVEN_ODD);
                 mask.addRect(0, 0, getWidth(), getHeight(), Path.Direction.CW);
-                mask.addOval(x-w/2, y-h/2, x+w/2, y+h/2, Path.Direction.CW);
+                mask.addOval(oval, Path.Direction.CW);
                 pen.setPathEffect(null);
                 pen.setStyle(Paint.Style.FILL);
                 pen.setColor(0x70000000);
@@ -66,7 +76,7 @@ final class CaptureDialog extends Dialog implements SurfaceHolder.Callback {
                 pen.setColor(Color.WHITE);
                 pen.setStrokeWidth(style.dp(2));
                 pen.setPathEffect(new DashPathEffect(new float[]{style.dp(7), style.dp(5)}, 0));
-                canvas.drawOval(x-w/2, y-h/2, x+w/2, y+h/2, pen);
+                canvas.drawOval(oval, pen);
             }
         });
         TextView hint = style.text(side ? "얼굴 전체와 한쪽 볼이 보이게 돌려 주세요" : "양쪽 볼이 보이게 정면을 맞춰 주세요", 16, Color.WHITE, 500);
@@ -89,6 +99,8 @@ final class CaptureDialog extends Dialog implements SurfaceHolder.Callback {
         bottom.bottomMargin = style.dp(48);
         frame.addView(shutter, bottom);
         shutter.setOnClickListener(v -> {
+            if (!shutter.isEnabled() || capturing || SystemClock.elapsedRealtime()-lastReady>1000) return;
+            capturing=true;
             shutter.setEnabled(false);
             try {
                 camera.takePicture(null, null, (data, source) -> {
@@ -130,6 +142,7 @@ final class CaptureDialog extends Dialog implements SurfaceHolder.Callback {
                     Math.abs((double)s.width/s.height - (double)photo.width/photo.height)
                     + Math.abs(s.width - 1280) * .00001)).get();
             params.setPreviewSize(size.width, size.height);
+            params.setPreviewFormat(android.graphics.ImageFormat.NV21);
             camera.setParameters(params);
             FrameLayout parent = (FrameLayout) preview.getParent();
             int w = rotation % 180 == 0 ? size.width : size.height;
@@ -137,9 +150,39 @@ final class CaptureDialog extends Dialog implements SurfaceHolder.Callback {
             float scale = Math.min((float)parent.getWidth()/w,(float)parent.getHeight()/h);
             preview.setLayoutParams(new FrameLayout.LayoutParams(Math.round(w*scale),Math.round(h*scale),Gravity.CENTER));
             camera.setPreviewDisplay(holder);
+            detector=FaceDetection.getClient(new FaceDetectorOptions.Builder()
+                    .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST).build());
+            camera.setPreviewCallback((data,source)->track(data,source,size,rotation,front));
             camera.startPreview();
-            shutter.setEnabled(true);
         } catch (Exception error) { fail(); }
+    }
+    private void track(byte[] data, Camera source, Camera.Size size, int rotation, boolean front) {
+        long now=SystemClock.elapsedRealtime();
+        if (camera!=source || detector==null || capturing || processing || now-lastFrame<120) return;
+        processing=true; lastFrame=now;
+        var image=InputImage.fromByteArray(data.clone(),size.width,size.height,rotation,InputImage.IMAGE_FORMAT_NV21);
+        detector.process(image).addOnCompleteListener(result->{
+            processing=false;
+            if(camera!=source || capturing) return;
+            boolean aligned=false;
+            if(result.isSuccessful() && result.getResult().size()==1){
+                var face=result.getResult().get(0);
+                RectF box=new RectF(face.getBoundingBox());
+                int w=rotation%180==0?size.width:size.height;
+                int h=rotation%180==0?size.height:size.width;
+                if(front) box.set(w-box.right,box.top,w-box.left,box.bottom);
+                float sx=(float)preview.getWidth()/w, sy=(float)preview.getHeight()/h;
+                box.set(box.left*sx,box.top*sy,box.right*sx,box.bottom*sy);
+                box.offset(preview.getLeft(),preview.getTop());
+                View parent=(View)preview.getParent();
+                aligned=FaceFrame.aligned(box,FaceFrame.guide(parent.getWidth(),parent.getHeight()),
+                        face.getHeadEulerAngleY(),face.getHeadEulerAngleZ(),side);
+            }
+            long stamp=SystemClock.elapsedRealtime();
+            if(!aligned || stamp-lastReady>1000) alignedSince=0;
+            if(aligned){ if(alignedSince==0) alignedSince=stamp; lastReady=stamp; }
+            shutter.setEnabled(aligned && stamp-alignedSince>=500);
+        });
     }
     private void fail() {
         dismiss(); onError.accept("선택한 카메라를 열지 못했어요. 다른 카메라나 앨범을 이용해 주세요.");
@@ -149,6 +192,7 @@ final class CaptureDialog extends Dialog implements SurfaceHolder.Callback {
     @Override public void dismiss() { release(); super.dismiss(); }
     private void release() {
         shutter.setEnabled(false);
-        if (camera != null) { camera.release(); camera = null; }
+        if (camera != null) { camera.setPreviewCallback(null); camera.release(); camera = null; }
+        if (detector != null) { detector.close(); detector=null; }
     }
 }

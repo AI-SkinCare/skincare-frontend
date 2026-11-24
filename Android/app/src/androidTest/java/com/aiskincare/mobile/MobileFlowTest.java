@@ -146,13 +146,24 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
         try {
             long end=SystemClock.elapsedRealtime()+15000;
             while(SystemClock.elapsedRealtime()<end && jpeg.get()==null && problem.get()==null) {
-                onUi(()->{
-                    List<Button> buttons=new ArrayList<>();
-                    collect(dialog.get().getWindow().getDecorView(),Button.class,buttons);
-                    for(Button b:buttons) if("사진 촬영".contentEquals(b.getContentDescription()) && b.isEnabled()) b.performClick();
-                });
+                java.lang.reflect.Field field=CaptureDialog.class.getDeclaredField("camera");
+                field.setAccessible(true);
+                var camera=(android.hardware.Camera)field.get(dialog.get());
+                if(camera!=null){
+                    SystemClock.sleep(800);
+                    onUi(()->{
+                        List<Button> buttons=new ArrayList<>();
+                        collect(dialog.get().getWindow().getDecorView(),Button.class,buttons);
+                        for(Button b:buttons) if("사진 촬영".contentEquals(b.getContentDescription()))
+                            assertFalse("No face in virtual camera scene",b.isEnabled());
+                        // Verify sensor JPEG delivery independently of the no-face shutter interlock.
+                        camera.takePicture(null,null,(bytes,source)->jpeg.set(bytes));
+                    });
+                    break;
+                }
                 SystemClock.sleep(200);
             }
+            while(jpeg.get()==null && problem.get()==null && SystemClock.elapsedRealtime()<end) SystemClock.sleep(100);
             assertNull(problem.get());
             assertNotNull("No full-size capture from camera",jpeg.get());
             Photo photo=Photo.decode(android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(jpeg.get())));
@@ -224,6 +235,9 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             assertFaceRejected(flat.toByteArray());
             try(FileOutputStream f=new FileOutputStream(input)){ f.write(portrait); }
             onUi(()->app.onActivityResult(20,Activity.RESULT_OK,new Intent().setData(Uri.fromFile(input))));
+            await("얼굴 위치 맞추기",12000);
+            getInstrumentation().waitForIdleSync();
+            onUi(()->click("이 사진 사용"));
             await("이 사진으로 분석할게요.",10000);
             captureScreen("capture");
             onUi(()->click("다음"));
@@ -254,6 +268,16 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
                 click("다음");
                 assertTrue(button("가끔").isSelected());
                 assertTrue(button("볼").isSelected());
+                assertFalse(button("분석 시작").isEnabled());
+                for (String field : new String[]{"수면 시간","물 섭취량","햇빛 노출","스트레스","사용 중인 제품"}) {
+                    boolean found = false;
+                    for (Button b : views(Button.class)) {
+                        if ((field+" · 잘 모르겠어요").contentEquals(b.getContentDescription()==null?"":b.getContentDescription())) {
+                            b.performClick(); found=true; break;
+                        }
+                    }
+                    assertTrue(field,found);
+                }
                 click("분석 시작");
             });
             await("분석 결과",65000);

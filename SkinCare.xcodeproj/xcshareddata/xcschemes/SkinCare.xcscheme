@@ -28,6 +28,10 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES">
       <Testables>
+         <TestableReference skipped="NO" parallelizable="NO">
+            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="BC0000000000000000000003"
+               BuildableName="SkinCareUITests.xctest" BlueprintName="SkinCareUITests" ReferencedContainer="container:SkinCare.xcodeproj"/>
+         </TestableReference>
          <TestableReference
             skipped = "NO"
             parallelizable = "YES">
