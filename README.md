@@ -10,7 +10,7 @@ Android 앱은 `Android/`에서 빌드합니다. 정면 셀프·후면 촬영, �
 두 앱은 얼굴 사진과 설문을 백엔드로 보내고, 이미지 분류 참고 결과와 맞춤 성분·관리법 추천, 분석 이력을 보여줍니다. 아래 실행·개발 안내는 iOS 기준입니다.
 
 ## 주요 기능
-- 얼굴 타원 가이드가 있는 내장 카메라 촬영 / 앨범 선택 (HEIC → JPEG 변환, 메타데이터 제거)
+- 얼굴 타원 가이드가 있는 내장 카메라 촬영(얼굴이 가이드 안에 들어와야 셔터 활성) / 앨범 선택 후 얼굴 위치 맞추기 (HEIC → JPEG 변환, 메타데이터 제거)
 - 설문 입력 (직전 분석 설문으로 기본값)
 - 6종 이미지 분류 참고 결과 (건선·아토피·여드름·정상·주사·지루, 모델 분류 점수)
 - 성분·관리 루틴·추천 이유 표시, 추천 보류(불확실·고민 없음)·실패·재요청 처리
@@ -29,12 +29,13 @@ Android 앱은 `Android/`에서 빌드합니다. 정면 셀프·후면 촬영, �
 3. 백엔드(Spring Boot)를 로컬에서 개발 모드로 실행 — Swagger `/api/docs`, fixture 응답 (API 변경사항 §1.5)
 4. `SkinCare` 스킴 + iPhone 시뮬레이터로 실행
 
-- API 주소: Debug는 `http://localhost:8080/api/v1`, Release는 `Config/Release.xcconfig`의 `API_BASE_URL`. (Spring Boot 기본 포트 8080)
+- API 주소: Debug는 `http://localhost:8080/api/v1`, Release는 `https://skincare.doi2.my/api/v1` (`Config/Release.xcconfig`). (백엔드 `server.port` 기본 8080 — 백엔드 ff2cc9c)
 - 실기기에서 맥의 로컬 백엔드에 붙으려면 `Local.xcconfig`에 `API_BASE_URL = http:/$()/<맥 LAN IP>:8080/api/v1`
 - 백엔드 없이 UI 확인 (Debug 전용): 스킴 Arguments에 `-MockAPI` 추가 → 목 응답으로 자동 로그인
-  - `-StartScreen <이름>`으로 화면 바로 열기: `login` `signup` `home` `guide` `capture` `camera` `survey` `report-completed` `report-queued` `report-generating` `report-uncertain` `report-no-concern` `report-failed` `recommendation` `history` `mypage`
+  - `-StartScreen <이름>`으로 화면 바로 열기: `login` `signup` `home` `guide` `capture` `camera` `album-align` `survey` `report-completed` `report-queued` `report-generating` `report-uncertain` `report-no-concern` `report-failed` `recommendation` `history` `mypage`
   - `-MockAIDown`(분석 서버 점검 중), `-MockEmpty`(이력 없음)
 - 실제 백엔드 개발 서버에서 상황 재현 (Debug 전용): `-FixtureScenario <값>` → `X-Fixture-Scenario` 헤더. 값: `ok` `uncertain` `no-concern` `rec-timeout` `rec-slow` `no-face` `ai-down`
+- TestFlight 업로드: `scripts/testflight.sh` (Xcode 로그인 계정, 빌드 번호 = UTC 시각 자동). Release 서버 `https://skincare.doi2.my/api/v1`
 - 테스트: `xcodebuild test -project SkinCare.xcodeproj -scheme SkinCare -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max'`
 
 ## 구조

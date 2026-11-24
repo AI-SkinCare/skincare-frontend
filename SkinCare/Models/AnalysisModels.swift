@@ -30,6 +30,43 @@ struct Survey: Codable, Sendable, Equatable {
         gender.map { $0 != .unknown } == true && ageBand.map { $0 != .unknown } == true
     }
 
+    /// 설문 항목에 답했는지. "잘 모르겠어요"(`unsure`)를 고른 것도 답한 것으로 본다 — 서버에는 그 키를 보내지 않는다.
+    func isAnswered(_ item: SurveyItem, unsure: Set<SurveyItem>) -> Bool {
+        if unsure.contains(item) { return true }
+        switch item {
+        case .skinType: return skinType.map { $0 != .unknown } == true
+        case .sleepHours: return sleepHours != nil
+        case .waterIntake: return waterIntakeLevel.map { $0 != .unknown } == true
+        case .sunExposure: return sunExposureLevel.map { $0 != .unknown } == true
+        case .stress: return stressLevel.map { $0 != .unknown } == true
+        case .concerns: return concerns?.contains { $0 != .unknown } == true
+        case .currentProducts: return currentProducts?.isEmpty == false
+        }
+    }
+
+    /// 1단계: 성별·연령대(필수, "모르겠어요" 없음) + 피부 타입
+    func isStepOneComplete(unsure: Set<SurveyItem>) -> Bool {
+        hasRequiredFields && SurveyItem.stepOne.allSatisfy { isAnswered($0, unsure: unsure) }
+    }
+
+    /// 2단계: 추가 요청(자유 입력)을 뺀 모든 항목
+    func isStepTwoComplete(unsure: Set<SurveyItem>) -> Bool {
+        SurveyItem.stepTwo.allSatisfy { isAnswered($0, unsure: unsure) }
+    }
+
+    /// "잘 모르겠어요"를 고르면 그 항목 값을 비운다 (서버에 보내지 않음).
+    mutating func clear(_ item: SurveyItem) {
+        switch item {
+        case .skinType: skinType = nil
+        case .sleepHours: sleepHours = nil
+        case .waterIntake: waterIntakeLevel = nil
+        case .sunExposure: sunExposureLevel = nil
+        case .stress: stressLevel = nil
+        case .concerns: concerns = nil
+        case .currentProducts: currentProducts = nil
+        }
+    }
+
     /// 서버에서 받은 값 중 앱이 모르는 값은 버리고 보낸다.
     func sanitized() -> Survey {
         var copy = self
@@ -55,6 +92,14 @@ struct Survey: Codable, Sendable, Equatable {
         copy.captureView = nil
         return copy
     }
+}
+
+/// 설문에서 "잘 모르겠어요"로 넘길 수 있는 항목 (앱 화면 상태 — 서버로 보내지 않음)
+enum SurveyItem: Hashable, Sendable {
+    case skinType, sleepHours, waterIntake, sunExposure, stress, concerns, currentProducts
+
+    static let stepOne: [SurveyItem] = [.skinType]
+    static let stepTwo: [SurveyItem] = [.sleepHours, .waterIntake, .sunExposure, .stress, .concerns, .currentProducts]
 }
 
 /// 이미지 분류 결과 (DenseNet121 6종). 진단이 아닌 **참고 결과**다.

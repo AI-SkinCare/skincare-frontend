@@ -16,7 +16,7 @@ let package = Package(
         ], resources: [.process("Resources/Care/care-guide.json")]),
         .testTarget(name: "ContractTests", dependencies: ["SkinCare"], path: "SkinCareTests", sources: [
             "DecodingTests.swift", "APIClientTests.swift", "PollingPolicyTests.swift", "GenerationTests.swift",
-            "ClassificationExplanationTests.swift", "MobileParityTests.swift"
+            "ClassificationExplanationTests.swift", "MobileParityTests.swift", "SurveyCompletionTests.swift"
         ], resources: [.process("Fixtures")])
     ]
 )

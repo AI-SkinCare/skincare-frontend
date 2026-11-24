@@ -25,6 +25,8 @@ final class CaptureFlowModel {
     private(set) var retakeReason: String?
 
     var survey = Survey()
+    /// 설문에서 "잘 모르겠어요"를 고른 항목
+    var surveyUnsure: Set<SurveyItem> = []
     private(set) var aiAvailable = true
     private(set) var isSubmitting = false
     var alert: AlertItem?
@@ -46,6 +48,8 @@ final class CaptureFlowModel {
               let previous = try? await api.send(AnalysisAPI.detail(id: latest.analysisId)).survey,
               survey == Survey() else { return }
         survey = previous.defaultsForNewAnalysis()
+        // 직전 설문에서 비워 둔 항목은 "잘 모르겠어요"로 이어받는다
+        surveyUnsure = Set((SurveyItem.stepOne + SurveyItem.stepTwo).filter { !survey.isAnswered($0, unsure: []) })
     }
 
     func handlePickedImage(_ data: Data) async {
@@ -80,7 +84,12 @@ final class CaptureFlowModel {
     }
 
     var canSubmit: Bool {
-        image != nil && survey.hasRequiredFields && aiAvailable && !isSubmitting
+        image != nil && isSurveyComplete && aiAvailable && !isSubmitting
+    }
+
+    /// 설문 모든 항목에 답했는지 ("잘 모르겠어요" 포함). 추가 요청(자유 입력)만 선택.
+    var isSurveyComplete: Bool {
+        survey.isStepOneComplete(unsure: surveyUnsure) && survey.isStepTwoComplete(unsure: surveyUnsure)
     }
 
     func enterSurvey(api: APIClient) async {
@@ -100,7 +109,7 @@ final class CaptureFlowModel {
 
     /// SCR-07: 제출 → 응답에 따라 이동 (화면 설계서 SCR-07 표)
     func submit(api: APIClient, router: AppRouter) async {
-        guard !isSubmitting, let image, survey.hasRequiredFields else { return }
+        guard !isSubmitting, let image, isSurveyComplete else { return }
         isSubmitting = true
         defer { isSubmitting = false }
 

@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import UIKit
 
 /// Debug 빌드 전용 실행 옵션. Xcode 스킴 Arguments 또는 `simctl launch`로 넘긴다.
 ///
@@ -12,6 +13,7 @@ import Foundation
 enum DebugLaunch {
     enum StartScreen: String {
         case login, signup, home, guide, capture, camera, survey
+        case albumAlign = "album-align"
         case reportCompleted = "report-completed"
         case reportQueued = "report-queued"
         case reportGenerating = "report-generating"
@@ -37,6 +39,21 @@ enum DebugLaunch {
         return StartScreen(rawValue: arguments[index + 1])
     }
 
+    /// `album-align` 화면 확인용 가짜 사진 (얼굴 없음, 1200×1600)
+    static func sampleAlbumImage() -> Data? {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 1200, height: 1600), format: {
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            return format
+        }())
+        return renderer.jpegData(withCompressionQuality: 0.9) { context in
+            UIColor(red: 0.85, green: 0.78, blue: 0.72, alpha: 1).setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 1200, height: 1600))
+            UIColor(red: 0.72, green: 0.62, blue: 0.55, alpha: 1).setFill()
+            context.cgContext.fillEllipse(in: CGRect(x: 350, y: 400, width: 500, height: 650))
+        }
+    }
+
     static func makeAPIClient() -> APIClient {
         guard usesMockAPI else { return APIClient() }
         let configuration = URLSessionConfiguration.ephemeral
@@ -56,7 +73,7 @@ enum DebugLaunch {
             .reportNoConcern: MockData.noConcernID, .reportFailed: MockData.failedID,
         ]
         switch startScreen {
-        case .guide, .capture, .camera, .survey:
+        case .guide, .capture, .camera, .survey, .albumAlign:
             router.isCaptureFlowPresented = true
         case .recommendation:
             router.homePath = [.report(analysisID: MockData.completedID), .recommendation(analysisID: MockData.completedID)]
