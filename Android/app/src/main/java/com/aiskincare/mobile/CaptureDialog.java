@@ -33,6 +33,10 @@ final class CaptureDialog extends Dialog implements SurfaceHolder.Callback {
     private int cameraId = -1;
 
     CaptureDialog(Activity host, boolean rear, Consumer<byte[]> onPhoto, Consumer<String> onError) {
+        this(host, rear, false, onPhoto, onError);
+    }
+
+    CaptureDialog(Activity host, boolean rear, boolean side, Consumer<byte[]> onPhoto, Consumer<String> onError) {
         super(host, android.R.style.Theme_Material_NoActionBar_Fullscreen);
         this.host = host;
         this.facing = rear ? Camera.CameraInfo.CAMERA_FACING_BACK : Camera.CameraInfo.CAMERA_FACING_FRONT;
@@ -65,7 +69,7 @@ final class CaptureDialog extends Dialog implements SurfaceHolder.Callback {
                 canvas.drawOval(x-w/2, y-h/2, x+w/2, y+h/2, pen);
             }
         });
-        TextView hint = style.text("양쪽 볼이 보이게 정면을 맞춰 주세요", 16, Color.WHITE, 500);
+        TextView hint = style.text(side ? "얼굴 전체와 한쪽 볼이 보이게 돌려 주세요" : "양쪽 볼이 보이게 정면을 맞춰 주세요", 16, Color.WHITE, 500);
         hint.setGravity(Gravity.CENTER);
         hint.setPadding(style.dp(56), style.dp(24), style.dp(56), style.dp(16));
         frame.addView(hint, new FrameLayout.LayoutParams(-1,-2,Gravity.TOP));

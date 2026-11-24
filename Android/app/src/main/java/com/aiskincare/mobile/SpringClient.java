@@ -14,11 +14,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/** Called from one worker thread. Credentials live only for the current app session. */
+/** Called from one worker thread. Only the refresh credential can survive process death. */
 final class SpringClient {
     private final String base;
+    private final RefreshStore store;
     private String access = "", refresh = "";
-    SpringClient(String base) { this.base = base; }
+    SpringClient(String base) { this(base, null); }
+    SpringClient(String base, RefreshStore store) { this.base = base; this.store = store; }
+
+    JSONObject restore() throws Exception {
+        refresh = store.read();
+        if (refresh.isEmpty()) return null;
+        try {
+            return json("POST", "/auth/refresh", false, new JSONObject().put("refreshToken", refresh)).getJSONObject("user");
+        } catch (Failure error) {
+            if (error.status != 401) throw error;
+            forget();
+            return null;
+        }
+    }
 
     static class Failure extends IOException {
         final int status;
@@ -98,6 +112,7 @@ final class SpringClient {
         String nextRefresh = tokens.isNull("refreshToken") ? "" : tokens.optString("refreshToken");
         if (nextRefresh.isEmpty()) nextRefresh = refreshCookie(connection);
         if (nextRefresh.isEmpty()) throw new IOException("로그인 세션 갱신 정보를 받지 못했어요.");
+        if (store != null) store.write(nextRefresh);
         access = nextAccess;
         refresh = nextRefresh;
     }
@@ -120,7 +135,7 @@ final class SpringClient {
         return "";
     }
 
-    void forget() { access = ""; refresh = ""; }
+    void forget() { access = ""; refresh = ""; if (store != null) store.clear(); }
     JSONObject me() throws Exception { return json("GET", "/users/me", true, null); }
     void deleteAccount() throws Exception { json("DELETE", "/users/me", true, null); forget(); }
     JSONObject login(String email, String password) throws Exception {
@@ -136,7 +151,14 @@ final class SpringClient {
                 out.write(new JSONObject().put("refreshToken", refresh).toString().getBytes(StandardCharsets.UTF_8))); }
         finally { forget(); }
     }
+    void requireSideModel() throws Exception {
+        JSONObject status = json("GET", "/system/status", false, null);
+        if (!status.optBoolean("aiAvailable") || !status.optBoolean("sideCaptureAvailable")) {
+            throw new Failure(503, "팀 서버의 측면 DINOv2가 아직 준비되지 않았어요. 정면으로 다시 촬영하거나 나중에 시도해 주세요.");
+        }
+    }
     JSONObject submit(byte[] photo, JSONObject survey) throws Exception {
+        if ("side".equals(survey.optString("captureView"))) requireSideModel();
         String boundary = "skin-" + UUID.randomUUID();
         return request("POST", "/analyses", true, "multipart/form-data; boundary=" + boundary, out -> {
             write(out, "--" + boundary + "\r\nContent-Disposition: form-data; name=\"image\"; filename=\"face.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n");
@@ -150,6 +172,7 @@ final class SpringClient {
     }
     JSONObject history(int page) throws Exception { return json("GET", "/analyses?page=" + page + "&size=20", true, null); }
     JSONObject detail(String id) throws Exception { return json("GET", "/analyses/" + Uri.encode(id), true, null); }
+    void deleteAnalysis(String id) throws Exception { json("DELETE", "/analyses/" + Uri.encode(id), true, null); }
     JSONObject retry(String id) throws Exception {
         return json("POST", "/analyses/" + Uri.encode(id) + "/recommendation/retry", true, null);
     }

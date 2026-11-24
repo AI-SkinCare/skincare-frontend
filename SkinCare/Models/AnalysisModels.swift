@@ -16,6 +16,7 @@ struct Survey: Codable, Sendable, Equatable {
     var note: String?
     var avoidIngredients: [String]?
     var symptomProfile: SymptomProfile?
+    var captureView: String?
 
     static let maxConcerns = 3
     static let maxProducts = 5
@@ -51,6 +52,7 @@ struct Survey: Codable, Sendable, Equatable {
     func defaultsForNewAnalysis() -> Survey {
         var copy = sanitized()
         copy.symptomProfile = nil
+        copy.captureView = nil
         return copy
     }
 }

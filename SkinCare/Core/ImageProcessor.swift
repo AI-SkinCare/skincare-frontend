@@ -16,6 +16,7 @@ enum ImageValidationError: Error, Equatable {
     case tooLarge
     case uniform
     case faceFraming
+    case sideAngle
 
     var message: String {
         switch self {
@@ -23,7 +24,8 @@ enum ImageValidationError: Error, Equatable {
         case .tooSmall: "사진 해상도가 낮아요. 더 선명한 사진을 골라 주세요."
         case .tooLarge: "사진 용량이 너무 커요. 다른 사진을 골라 주세요."
         case .uniform: "사진 전체가 단색에 가까워요. 얼굴과 주변이 보이게 다시 찍어 주세요."
-        case .faceFraming: "한 사람의 얼굴이 잘 보이는 정면 사진으로 다시 시도해 주세요."
+        case .faceFraming: "한 사람의 얼굴 전체가 잘 보이는 사진으로 다시 시도해 주세요."
+        case .sideAngle: "측면 각도를 확인하기 어려워요. 한쪽 볼과 코 윤곽이 보이게 다시 찍어 주세요."
         }
     }
 }
@@ -39,7 +41,7 @@ enum ImageProcessor {
     static let maxUploadBytes = 10 * 1024 * 1024
     static let jpegQuality = 0.9
 
-    static func prepareForAnalysis(_ data: Data) throws(ImageValidationError) -> ProcessedImage {
+    static func prepareForAnalysis(_ data: Data, side: Bool = false) throws(ImageValidationError) -> ProcessedImage {
         let photo = try process(data)
         let detection = VNDetectFaceRectanglesRequest()
         do {
@@ -47,6 +49,9 @@ enum ImageProcessor {
         } catch { throw .faceFraming }
         guard let faces = detection.results, faces.count == 1,
               faces[0].boundingBox.width >= 0.18 else { throw .faceFraming }
+        if side {
+            guard let yaw = faces[0].yaw?.doubleValue, abs(yaw) >= 20 * Double.pi / 180 else { throw .sideAngle }
+        }
         return photo
     }
 

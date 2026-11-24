@@ -16,6 +16,11 @@ final class CaptureFlowModel {
     private(set) var previewImage: UIImage?
     private(set) var imageError: String?
     private(set) var isProcessingImage = false
+    var sideView = false {
+        didSet {
+            if sideView != oldValue { discardImage(); imageError = nil }
+        }
+    }
     /// E2001(얼굴 미검출, AI 미구현)·E2002로 돌아왔을 때 촬영 화면 상단 배너 (SCR-05)
     private(set) var retakeReason: String?
 
@@ -51,10 +56,11 @@ final class CaptureFlowModel {
         imageError = nil
         defer { isProcessingImage = false }
 
+        let side = sideView
         let result = await Task.detached(priority: .userInitiated) {
-            Result { () throws(ImageValidationError) -> ProcessedImage in try ImageProcessor.prepareForAnalysis(data) }
+            Result { () throws(ImageValidationError) -> ProcessedImage in try ImageProcessor.prepareForAnalysis(data, side: side) }
         }.value
-
+        guard side == sideView else { return }
         switch result {
         case .success(let processed):
             image = processed
@@ -77,20 +83,38 @@ final class CaptureFlowModel {
         image != nil && survey.hasRequiredFields && aiAvailable && !isSubmitting
     }
 
+    func enterSurvey(api: APIClient) async {
+        guard image != nil, path.last != .survey else { return }
+        do { guard try await modelReady(api: api) else { return } }
+        catch { alert = AlertItem(message: error.userMessage); return }
+        if image != nil && path.last != .survey { path.append(.survey) }
+    }
+
+    private func modelReady(api: APIClient) async throws -> Bool {
+        guard sideView else { return true }
+        let status = try await api.send(SystemAPI.status())
+        if status.canAnalyzeSide { return true }
+        alert = AlertItem(message: "팀 서버의 측면 DINOv2가 아직 준비되지 않았어요. 정면으로 다시 촬영하거나 나중에 시도해 주세요.")
+        return false
+    }
+
     /// SCR-07: 제출 → 응답에 따라 이동 (화면 설계서 SCR-07 표)
     func submit(api: APIClient, router: AppRouter) async {
-        guard let image, survey.hasRequiredFields else { return }
+        guard !isSubmitting, let image, survey.hasRequiredFields else { return }
         isSubmitting = true
         defer { isSubmitting = false }
 
         do {
-            let submission = try await api.send(AnalysisAPI.submit(imageJPEG: image.jpegData, survey: survey))
+            guard try await modelReady(api: api) else { return }
+            var answers = survey
+            answers.captureView = sideView ? "side" : "front"
+            let submission = try await api.send(AnalysisAPI.submit(imageJPEG: image.jpegData, survey: answers))
             discardImage()
             router.showReport(analysisID: submission.analysisId)
         } catch let error as APIError {
             switch error.code {
             case "E2001":
-                returnToCapture(reason: "얼굴을 찾지 못했어요. 정면에서 다시 찍어 주세요.")
+                returnToCapture(reason: "얼굴을 찾지 못했어요. 한 사람의 얼굴 전체가 보이게 다시 찍어 주세요.")
             case "E2002":
                 // 해상도 부족·흐림·저조도·디코딩 실패 (API 변경사항 §2.8)
                 returnToCapture(reason: "사진을 제대로 읽지 못했어요. 밝은 곳에서 선명하게 다시 찍어 주세요.")

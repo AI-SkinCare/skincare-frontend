@@ -25,6 +25,10 @@ struct HomeView: View {
                 }
 
                 startCard
+                if let id = session.user?.id {
+                    NavigationLink("매일 피부 기록") { DailySkinJournal(userID: id) }
+                        .buttonStyle(.outline)
+                }
                 recentSection
                 flowGuide
             }
@@ -46,7 +50,7 @@ struct HomeView: View {
                     Text("사진 한 장이면 충분해요.")
                         .appText(.title)
                         .foregroundStyle(.ink)
-                    Text("정면 사진과 간단한 설문으로 피부 이미지를\n분류하고 맞는 성분을 추천해요.")
+                    Text("정면 또는 측면 사진과 간단한 설문으로 피부 이미지를\n분류하고 맞는 성분을 추천해요.")
                         .appText(.bodySmall)
                         .foregroundStyle(.textMuted)
                 }
@@ -141,7 +145,7 @@ private struct FlowStep {
     let detail: String
 
     static let all = [
-        FlowStep(icon: "camera.viewfinder", title: "정면 사진 촬영", detail: "얼굴을 원 안에 맞춰 찍고 간단한 설문에 답해요."),
+        FlowStep(icon: "camera.viewfinder", title: "얼굴 사진 촬영", detail: "정면·측면 중 하나를 고르고 얼굴 전체가 보이게 찍어요."),
         FlowStep(icon: "square.grid.3x2", title: "6종 이미지 분류",
                  detail: "건선 · 아토피 · 여드름 · 정상 · 주사 · 지루 중 가장 가까운 결과를 보여줘요."),
         FlowStep(icon: "drop", title: "성분 · 관리법 추천", detail: "분류 결과와 설문을 바탕으로 맞는 성분과 루틴을 추천해요."),

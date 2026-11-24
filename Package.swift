@@ -11,12 +11,12 @@ let package = Package(
             "Networking/APIRequest.swift", "Networking/APIError.swift", "Networking/APIClient.swift",
             "Networking/HTTPTransport.swift", "Networking/Endpoints.swift", "Networking/MultipartFormData.swift",
             "Networking/AuthTokenManager.swift", "Networking/RefreshTokenStore.swift",
-            "Core/AnalysisDisplay.swift", "Core/PollingPolicy.swift", "Core/Formatting.swift",
+            "Core/AnalysisDisplay.swift", "Core/PollingPolicy.swift", "Core/Formatting.swift", "Core/CareCatalog.swift",
             "App/AppCopy.swift", "App/AppConfig.swift"
-        ]),
+        ], resources: [.process("Resources/Care/care-guide.json")]),
         .testTarget(name: "ContractTests", dependencies: ["SkinCare"], path: "SkinCareTests", sources: [
             "DecodingTests.swift", "APIClientTests.swift", "PollingPolicyTests.swift", "GenerationTests.swift",
-            "ClassificationExplanationTests.swift"
-        ])
+            "ClassificationExplanationTests.swift", "MobileParityTests.swift"
+        ], resources: [.process("Fixtures")])
     ]
 )

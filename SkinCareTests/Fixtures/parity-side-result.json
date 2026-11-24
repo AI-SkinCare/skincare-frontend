@@ -1,0 +1,14 @@
+{
+  "analysisId": "fictional-side-test",
+  "createdAt": "2026-11-24T07:00:00Z",
+  "status": "COMPLETED",
+  "disease": {"label":"정상","labelEn":"normal","confidence":0.7933159470558167,"uncertain":false,"probabilities":{},"modelVersion":"dinov2_linear_875acf74c4"},
+  "survey": {"gender":"female","ageBand":"30s","skinType":"dry","captureView":"side","concerns":["dryness"],"avoidIngredients":[],"symptomProfile":{"itch":"occasional","recurringRedness":false}},
+  "recommendationStatus": "generated",
+  "generation":{"origin":"model","qualityStatus":"ok","evidenceStatus":"source_linked"},
+  "recommendation":{
+    "ingredients":[{"name":"글리세린","priority":1},{"name":"세라마이드","priority":2}],
+    "routine":[{"step":1,"time":"anytime","action":"무향의 완제품 보습제를 제품 표시대로 사용한다."},{"step":2,"time":"anytime","action":"자극이 생기면 사용을 중단한다."}]
+  },
+  "guidance":[]
+}

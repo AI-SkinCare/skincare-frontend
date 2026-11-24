@@ -1,0 +1,112 @@
+{
+  "care": {
+    "여드름": {
+      "body": "세안 뒤 건조함이 느껴지면 모공을 막지 않는다고 표시된 보습제를 살펴보세요.",
+      "source": "https://www.aad.org/public/diseases/acne/skin-care/moisturizer"
+    },
+    "주사": {
+      "body": "세안할 때 손끝으로 부드럽게 씻고 미지근한 물로 충분히 헹궈 보세요.",
+      "source": "https://www.aad.org/public/diseases/rosacea/triggers/tips"
+    },
+    "아토피": {
+      "body": "피부가 건조하고 가려울 때는 씻은 뒤 물기가 조금 남았을 때 무향 보습제를 발라 보세요.",
+      "source": "https://www.aad.org/public/diseases/eczema/insider/moisturizer-reduce-flares"
+    },
+    "건선": {
+      "body": "피부가 건조하고 각질이 보일 때는 뜨거운 물이나 스크럽을 피하고 가볍게 두드려 말려 보세요.",
+      "source": "https://www.aad.org/public/diseases/psoriasis/skin-care/baths-showers"
+    },
+    "지루": {
+      "body": "세정제가 피부에 남지 않도록 충분히 헹구고, 향이 없는 순한 세정제를 선택해 보세요.",
+      "source": "https://www.aad.org/public/diseases/a-z/seborrheic-dermatitis-self-care"
+    }
+  },
+  "diet": {
+    "general": {
+      "body": "평소 식사에 채소, 콩류, 통곡물을 다양하게 포함해 보세요. 특정 피부질환에 대한 처방이 아닌 일반 식생활 안내예요.",
+      "source": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet"
+    },
+    "여드름": {
+      "body": "단 음료를 자주 마신다면 한 번은 물로 바꿔 보고 피부 변화를 기록해 보세요. 저혈당 식사와 여드름의 관계는 연구 결과가 일치하지 않아요.",
+      "source": "https://www.aad.org/public/diseases/acne/causes/diet"
+    },
+    "주사": {
+      "body": "뜨거운 음료를 마신 뒤 얼굴이 자주 달아오른다면 식혀서 마셔 보고 차이를 기록해 보세요.",
+      "source": "https://www.aad.org/public/diseases/rosacea/triggers/prevent"
+    }
+  },
+  "aliases": {
+    "글리세린": [
+      "glycerin",
+      "glycerol",
+      "글리세롤"
+    ],
+    "세라마이드": [
+      "ceramide",
+      "ceramides",
+      "세라마이드엔피",
+      "ceramidenp"
+    ],
+    "히알루론산": [
+      "hyaluronicacid",
+      "히알루론산"
+    ],
+    "스쿠알란": [
+      "squalane"
+    ],
+    "징크옥사이드": [
+      "zincoxide",
+      "산화아연",
+      "징크옥사이드"
+    ],
+    "향료": [
+      "fragrance",
+      "parfum"
+    ],
+    "레티놀": [
+      "retinol"
+    ],
+    "판테놀": [
+      "panthenol"
+    ],
+    "나이아신아마이드": [
+      "niacinamide",
+      "나이아신아미드"
+    ]
+  },
+  "products": [
+    {
+      "name": "Vanicream Daily Facial Moisturizer",
+      "category": "얼굴 보습제",
+      "matches": [
+        "글리세린",
+        "세라마이드",
+        "히알루론산",
+        "스쿠알란"
+      ],
+      "absent": [
+        "향료",
+        "레티놀",
+        "판테놀",
+        "나이아신아마이드",
+        "징크옥사이드"
+      ],
+      "source": "https://www.vanicream.com/product/vanicream-daily-facial-moisturizer"
+    },
+    {
+      "name": "Vanicream Facial Moisturizer Broad Spectrum SPF 30",
+      "category": "자외선 차단제",
+      "matches": [
+        "징크옥사이드"
+      ],
+      "absent": [
+        "향료",
+        "레티놀",
+        "판테놀",
+        "나이아신아마이드",
+        "히알루론산"
+      ],
+      "source": "https://www.vanicream.com/product/facial-moisturizer-with-spf"
+    }
+  ]
+}

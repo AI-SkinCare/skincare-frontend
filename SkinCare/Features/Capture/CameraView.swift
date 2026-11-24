@@ -5,6 +5,7 @@ import SwiftUI
 /// 촬영 결과는 메모리(Data)로만 넘기고 사진 앱이나 파일에 저장하지 않는다 (NFR-PRI-01).
 struct CameraView: View {
     var useRearCamera = false
+    var sideView = false
     let onCapture: (Data) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -87,7 +88,7 @@ struct CameraView: View {
                 .appText(.title)
                 .foregroundStyle(.white)
             HStack(spacing: Spacing.xs) {
-                ForEach(["정면", "자연광", "맨얼굴"], id: \.self) { hint in
+                ForEach([sideView ? "측면" : "정면", "자연광", "맨얼굴"], id: \.self) { hint in
                     Text(hint)
                         .appText(.label)
                         .foregroundStyle(.white)

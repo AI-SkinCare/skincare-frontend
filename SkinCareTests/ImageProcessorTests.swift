@@ -6,6 +6,17 @@ import Testing
 import UniformTypeIdentifiers
 
 struct ImageProcessorTests {
+    private final class TestBundle {}
+
+    @Test("같은 가상 정면·측면 사진으로 촬영 모드를 구분한다")
+    func validateCaptureAngles() throws {
+        let bundle = Bundle(for: TestBundle.self)
+        let side = try Data(contentsOf: #require(bundle.url(forResource: "fictional-side-face", withExtension: "jpg")))
+        let front = try Data(contentsOf: #require(bundle.url(forResource: "fictional-frontal-face", withExtension: "jpg")))
+        #expect(try ImageProcessor.prepareForAnalysis(side, side: true).width >= 720)
+        #expect(try ImageProcessor.prepareForAnalysis(front).width >= 720)
+        #expect(throws: ImageValidationError.sideAngle) { try ImageProcessor.prepareForAnalysis(front, side: true) }
+    }
     @Test("짧은 변 720px 미만이면 거부")
     func rejectsSmallImage() throws {
         let data = try makeJPEG(width: 700, height: 1000)

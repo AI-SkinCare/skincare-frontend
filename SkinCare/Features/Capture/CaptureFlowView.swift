@@ -103,7 +103,7 @@ struct CaptureGuideView: View {
     }
 
     private let rules = [
-        Rule(icon: "person.crop.square", title: "정면을 봐 주세요", detail: "얼굴 전체가 화면 가운데에 오도록 찍어요."),
+        Rule(icon: "person.crop.square", title: "정면·측면을 선택해 주세요", detail: "얼굴 전체를 가운데에 놓고 측면은 한쪽 볼이 보이게 돌려요."),
         Rule(icon: "sun.max", title: "자연광에서 찍어 주세요", detail: "그늘이나 역광을 피하고 밝은 곳에서 찍어요."),
         Rule(icon: "eyeglasses", title: "화장과 안경은 벗어 주세요", detail: "맨얼굴일 때 더 정확하게 분석돼요."),
         Rule(icon: "comb", title: "앞머리를 넘겨 주세요", detail: "이마가 가려지지 않게 정리해요."),

@@ -47,6 +47,9 @@ public final class MainActivity extends Activity {
     private String screen;
     private int version;
     private boolean rear, busy;
+    private boolean side;
+    private boolean loadedDefaults;
+    private long userId;
     private Photo photo;
     private long pollStart;
     private boolean foreground;
@@ -66,8 +69,20 @@ public final class MainActivity extends Activity {
                 View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         style = new AppStyle(this);
         server = canChooseServer() ? getPreferences(MODE_PRIVATE).getString("spring",BuildConfig.SPRING_URL) : BuildConfig.SPRING_URL;
-        api = new SpringClient(server);
-        auth(false);
+        connect();
+    }
+    private void connect() {
+        RefreshStore store = new RefreshStore(this, server);
+        api = new SpringClient(server, store);
+        if (!store.hasSession()) { auth(false); return; }
+        page("restore", "로그인 확인 중");
+        SpringClient client = api;
+        task(() -> {
+            try { return client.restore(); } catch (Exception unavailable) { return null; }
+        }, user -> {
+            if (user == null) auth(false);
+            else signedIn(user.optString("email"), user);
+        });
     }
     private int dp(int v) { return style.dp(v); }
     private void page(String id, String title) {
@@ -314,12 +329,7 @@ public final class MainActivity extends Activity {
         } else {
             Button login = button("로그인", true, () -> {
                 String email = mail.getText().toString().trim(), password = pass.getText().toString();
-                task(() -> api.login(email, password), session -> {
-                    JSONObject user = session.optJSONObject("user");
-                    nickname = user == null ? "" : user.optString("nickname");
-                    this.email = email;
-                    home();
-                });
+                task(() -> api.login(email, password), session -> signedIn(email, session.optJSONObject("user")));
             });
             LinearLayout links = style.row();
             links.setGravity(Gravity.CENTER);
@@ -375,9 +385,10 @@ public final class MainActivity extends Activity {
         symbol.setBackground(style.surface(WHITE, 24, false));
         start.addView(symbol, dp(46), dp(46));
         label(start, "사진 한 장이면 충분해요.", 24, INK, 700, 14, 5);
-        label(start, "정면 사진과 간단한 설문으로 피부 이미지를\n분류하고 맞는 성분을 추천해요.",
+        label(start, "정면 또는 측면 사진과 간단한 설문으로 피부 이미지를\n분류하고 맞는 성분을 추천해요.",
                 14, MUTED, 400, 0, 12);
         addAction(start, "피부 분석 시작", true, this::startCapture);
+        if (userId > 0) button("매일 피부 기록", false, this::diary);
 
         LinearLayout recentHeader = style.row();
         recentHeader.addView(style.text("최근 결과", 20, INK, 700), new LinearLayout.LayoutParams(0, -2, 1));
@@ -389,7 +400,7 @@ public final class MainActivity extends Activity {
         label(placeholder, "최근 분석 결과를 불러오고 있어요.", 14, MUTED, 400, 2, 2);
         label(page, "이렇게 분석해요", 20, INK, 700, 13, 12);
         LinearLayout guide = card(page, true, 14);
-        infoRow(guide, "camera", "사진 촬영", "정면 얼굴 사진을 준비해 주세요.");
+        infoRow(guide, "camera", "사진 촬영", "정면이나 한쪽 볼이 보이는 사진을 준비해 주세요.");
         separator(guide);
         infoRow(guide, "scan", "피부 이미지 분류", "정상 포함 여섯 가지 유형의 분류 점수를 확인해요.");
         separator(guide);
@@ -411,6 +422,76 @@ public final class MainActivity extends Activity {
                 } else historyRow(recent, item, "home");
             });
         });
+    }
+
+    void signedIn(String address, JSONObject user) {
+        email = address;
+        nickname = user == null ? "" : user.optString("nickname");
+        userId = user == null ? 0 : user.optLong("id");
+        home();
+    }
+
+    android.content.SharedPreferences journal() {
+        if (userId <= 0) throw new IllegalStateException("로그인 후 기록할 수 있어요.");
+        String account = android.util.Base64.encodeToString(server.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                android.util.Base64.URL_SAFE | android.util.Base64.NO_WRAP);
+        return getSharedPreferences("diary-" + account + "-" + userId, MODE_PRIVATE);
+    }
+
+    private void diary() {
+        page("diary", null);
+        toolbar("매일 피부 기록", this::home, "홈", null);
+        LocalDate today = LocalDate.now();
+        var prefs = journal();
+        var entries = new java.util.TreeMap<String, JSONObject>(java.util.Comparator.reverseOrder());
+        for (var item : prefs.getAll().entrySet()) {
+            try { entries.put(item.getKey(), new JSONObject((String) item.getValue())); }
+            catch (org.json.JSONException ignored) { /* Skip an unreadable entry. */ }
+        }
+        JSONObject saved = entries.get(today.toString());
+        hero("오늘 피부는 얼마나 편안했나요?", "0점은 매우 불편, 10점은 매우 편안이에요. 매일 비슷한 시간에 직접 기록해 보세요.");
+        String[] scores = new String[12];
+        scores[0] = "오늘의 점수 선택";
+        for (int i = 0; i <= 10; i++) scores[i + 1] = i + "점";
+        Spinner score = new Spinner(this);
+        var choices = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, scores);
+        score.setAdapter(choices);
+        score.setContentDescription("오늘의 피부 편안함 점수");
+        score.setSelection(saved == null ? 0 : saved.optInt("score") + 1);
+        page.addView(score, -1, dp(50));
+        EditText product = field("오늘 쓴 제품 (선택)", InputType.TYPE_CLASS_TEXT);
+        product.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(100)});
+        if (saved != null) product.setText(saved.optString("product"));
+        button(saved == null ? "오늘 기록 저장" : "오늘 기록 수정", true, () -> {
+            if (!today.equals(LocalDate.now())) { diary(); notice("날짜가 바뀌었어요. 오늘 기록을 확인해 주세요."); return; }
+            int selected = score.getSelectedItemPosition() - 1;
+            if (selected < 0) { notice("오늘 느낀 점수를 선택해 주세요."); return; }
+            JSONObject entry = new JSONObject();
+            put(entry, "score", selected); put(entry, "product", product.getText().toString().trim());
+            prefs.edit().putString(today.toString(), entry.toString()).apply(); diary();
+        });
+        label(page, "날짜별 변화", 20, INK, 700, 15, 3);
+        label(page, "점수는 내가 느낀 편안함이에요. 이 기기의 내 계정에 저장됩니다.", 14, MUTED, 400, 0, 9);
+        if (entries.isEmpty()) label(page, "첫 기록부터 날짜별로 쌓여요.", 15, MUTED, 400, 6, 10);
+        for (var item : entries.entrySet()) {
+            JSONObject entry = item.getValue();
+            var previous = entries.higherEntry(item.getKey());
+            int points = entry.optInt("score");
+            String change = "첫 기록";
+            if (previous != null) {
+                int diff = points - previous.getValue().optInt("score");
+                change = previous.getKey() + " 대비 " + (diff == 0 ? "같음" : Math.abs(diff) + "점 " + (diff > 0 ? "상승" : "하락"));
+            }
+            LinearLayout row = card(page, true, 12);
+            label(row, item.getKey() + "   " + points + "/10", 17, INK, 600, 0, 2);
+            meter(row, points / 10.0);
+            label(row, change, 14, MUTED, 400, 0, 2);
+            if (!entry.optString("product").isEmpty()) label(row, "사용 제품 · " + entry.optString("product"), 14, INK, 400, 1, 0);
+            row.addView(link("기록 삭제", () -> new AlertDialog.Builder(this).setMessage(item.getKey() + " 기록을 지울까요?")
+                    .setNegativeButton("취소", null).setPositiveButton("삭제", (dialog, which) -> {
+                        prefs.edit().remove(item.getKey()).apply(); diary();
+                    }).show()));
+        }
     }
 
     private void infoRow(LinearLayout owner, String icon, String title, String detail) {
@@ -478,7 +559,7 @@ public final class MainActivity extends Activity {
         profileAction(menu, "회원 탈퇴", NEGATIVE, () -> new AlertDialog.Builder(this)
                 .setMessage("계정과 저장한 분석 이력을 모두 삭제할까요? 삭제 후 복구할 수 없어요.")
                 .setNegativeButton("취소", null).setPositiveButton("계정 삭제", (dialog, which) ->
-                    task(() -> { api.deleteAccount(); return true; }, ok -> { reset(); auth(false); })).show());
+                    task(() -> { api.deleteAccount(); return true; }, ok -> { if (userId > 0) journal().edit().clear().apply(); reset(); auth(false); })).show());
         label(page, "스킨케어 " + BuildConfig.VERSION_NAME, 12, MUTED, 400, 0, 4).setGravity(Gravity.CENTER);
         tabs("my");
         int owner = version;
@@ -528,7 +609,7 @@ public final class MainActivity extends Activity {
                 entry.setError("HTTPS 주소와 /api/v1 경로를 확인해 주세요."); return;
             }
             getPreferences(MODE_PRIVATE).edit().putString("spring",url).apply();
-            server=url; api=new SpringClient(server); dialog.dismiss(); auth(false);
+            server=url; dialog.dismiss(); connect();
         }));
         dialog.show();
     }
@@ -543,6 +624,7 @@ public final class MainActivity extends Activity {
     private void startCapture() {
         clearCapture();
         rear = false;
+        side = false;
         if (getPreferences(MODE_PRIVATE).getBoolean("hideGuide", false)) capture();
         else guide();
     }
@@ -554,7 +636,7 @@ public final class MainActivity extends Activity {
         toolbar("", null, "", this::closeCapture);
         hero("이렇게 찍어 주세요.", "정확한 분석을 위한 네 가지예요.");
         LinearLayout rules = card(page, true, 14);
-        infoRow(rules, "scan", "정면을 봐 주세요", "얼굴 전체가 화면 가운데에 오도록 찍어요.");
+        infoRow(rules, "scan", "정면·측면을 선택해 주세요", "측면은 얼굴 전체 윤곽과 한쪽 볼이 보이게 찍어요.");
         separator(rules);
         infoRow(rules, "sun", "자연광에서 찍어 주세요", "그늘이나 역광을 피하고 밝은 곳에서 찍어요.");
         separator(rules);
@@ -589,7 +671,10 @@ public final class MainActivity extends Activity {
         toolbar("", showGuide ? this::guide : null, "촬영 가이드", this::closeCapture);
         stepIndicator(false);
         hero("얼굴 사진을 준비해 주세요.", photo == null
-                ? "정면 얼굴이 잘 보이는 사진 한 장이면 돼요." : "이 사진으로 분석할게요.");
+                ? "촬영 각도를 고른 뒤 사진 한 장을 준비해 주세요." : "이 사진으로 분석할게요.");
+        segment(page, "정면", "측면", side, value -> {
+            if (side != value) { side = value; photo = null; capture(); }
+        });
 
         FrameLayout preview = new FrameLayout(this) {
             @Override protected void onMeasure(int width, int height) {
@@ -609,13 +694,65 @@ public final class MainActivity extends Activity {
         }
         page.addView(preview, -1, -2);
         segment(page, "셀프 촬영", "다른 사람이 촬영", rear, value -> rear = value);
-        label(page, "눈높이에서 양쪽 볼이 보이게 정면을 찍어 주세요. 사진에 보이지 않는 부위는 평가하기 어려워요.",
+        label(page, side ? "한쪽 볼과 코 윤곽이 보이게 30~60도 돌려 주세요. 측면 분류는 시험 기능이며 실제 환자에서 정확도 검증이 필요해요." : "눈높이에서 양쪽 볼이 보이게 정면을 찍어 주세요.",
                 14, MUTED, 400, 1, 12);
         LinearLayout sources = style.row();
         pair(sources, action(photo == null ? "촬영하기" : "다시 찍기", false, () -> camera(rear)),
                 action(photo == null ? "앨범에서 선택" : "다른 사진", false, this::pickPhoto), 8);
         page.addView(sources);
-        style.primary(footer("다음", this::survey), photo != null);
+        style.primary(footer("다음", this::enterSurvey), photo != null);
+    }
+
+    private void enterSurvey() {
+        task(() -> {
+            if (side) api.requireSideModel();
+            if (loadedDefaults) return null;
+            try {
+                JSONObject recent = api.history(1).getJSONArray("items").optJSONObject(0);
+                return recent == null ? null : api.detail(recent.getString("analysisId")).optJSONObject("survey");
+            } catch (SpringClient.Failure e) {
+                if (e.status == 401) throw e;
+                return null;
+            } catch (Exception unavailable) { return null; }
+        }, previous -> {
+            if (previous != null) applyDefaults(previous);
+            loadedDefaults = true;
+            survey();
+        });
+    }
+
+    private void applyDefaults(JSONObject previous) {
+        copyChoice(previous, "gender", "male", "female");
+        copyChoice(previous, "ageBand", "10s", "20s", "30s", "40s", "50s", "60s", "70s");
+        copyChoice(previous, "skinType", "dry", "normal", "oily", "combination");
+        for (String key : new String[]{"stressLevel", "sunExposureLevel", "waterIntakeLevel"})
+            copyChoice(previous, key, "low", "medium", "high");
+        JSONArray concerns = previous.optJSONArray("concerns");
+        JSONArray known = new JSONArray();
+        List<String> allowed = java.util.Arrays.asList("pigmentation","pore","wrinkle","acne","redness","dryness","sagging","sensitivity");
+        for (int i=0; concerns != null && i<concerns.length() && known.length()<3; i++)
+            if (allowed.contains(concerns.optString(i))) known.put(concerns.optString(i));
+        if (known.length()>0) put(draft, "concerns", known);
+        int hours = previous.optInt("sleepHours", -1);
+        if (hours >= 0 && hours <= 14) draftText.put("sleep", String.valueOf(hours));
+        if (!previous.isNull("note")) draftText.put("note", previous.optString("note"));
+        for (String key : new String[]{"currentProducts","avoidIngredients"}) {
+            JSONArray items = previous.optJSONArray(key);
+            if (items != null && items.length()>0) {
+                put(draft, key, items);
+                draftText.put(key.equals("currentProducts") ? "products" : "avoid", listText(items));
+            }
+        }
+    }
+
+    private void copyChoice(JSONObject previous, String key, String... allowed) {
+        String value = previous.optString(key);
+        if (java.util.Arrays.asList(allowed).contains(value)) put(draft, key, value);
+    }
+    private static String listText(JSONArray items) {
+        List<String> names = new ArrayList<>();
+        for (int i = 0; i < items.length(); i++) names.add(items.optString(i));
+        return String.join(", ", names);
     }
 
     private void pickPhoto() {
@@ -664,17 +801,18 @@ public final class MainActivity extends Activity {
 
     private void clearCapture() {
         photo = null;
+        loadedDefaults = false;
         draft = new JSONObject();
         draftText.clear();
     }
 
-    private void reset() { clearCapture(); nickname = ""; email = ""; }
+    private void reset() { clearCapture(); nickname = ""; email = ""; userId = 0; }
     private void camera(boolean rearLens) {
         rear = rearLens;
         if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.CAMERA}, 21); return;
         }
-        camera = new CaptureDialog(this, rear, bytes -> decode(ImageDecoder.createSource(ByteBuffer.wrap(bytes))), this::notice);
+        camera = new CaptureDialog(this, rear, side, bytes -> decode(ImageDecoder.createSource(ByteBuffer.wrap(bytes))), this::notice);
         camera.show();
     }
     @Override public void onRequestPermissionsResult(int req, String[] p, int[] results) {
@@ -690,9 +828,10 @@ public final class MainActivity extends Activity {
     }
     private void decode(ImageDecoder.Source source) {
         photo=null; capture();
+        boolean sideView = side;
         task(() -> {
             Photo selected=Photo.decode(source);
-            selected.requireOneFace();
+            if (sideView) selected.requireSideFace(); else selected.requireOneFace();
             return selected;
         }, selected -> { photo = selected; capture(); });
     }
@@ -857,7 +996,9 @@ public final class MainActivity extends Activity {
         footer("분석 시작", () -> submit(avoid, hours, products, note));
     }
 
-    private JSONArray commaSeparated(EditText input, int count, int length, String error) {
+    private JSONArray commaSeparated(EditText input, String key, int count, int length, String error) {
+        JSONArray previous = draft.optJSONArray(key);
+        if (previous != null && listText(previous).contentEquals(input.getText())) return previous;
         JSONArray result = new JSONArray();
         for (String part : input.getText().toString().split(",")) {
             String item = part.trim();
@@ -873,9 +1014,11 @@ public final class MainActivity extends Activity {
         JSONObject answer;
         try {
             answer = new JSONObject(draft.toString());
+            put(answer, "captureView", side ? "side" : "front");
             JSONObject symptoms = answer.optJSONObject("symptomProfile");
             if (symptoms != null && symptoms.length() == 0) answer.remove("symptomProfile");
-            JSONArray exclusions = commaSeparated(avoid, 30, 100, "회피 성분은 30개까지, 이름은 100자 이내로 입력해 주세요.");
+            answer.remove("avoidIngredients");
+            JSONArray exclusions = commaSeparated(avoid, "avoidIngredients", 30, 100, "회피 성분은 30개까지, 이름은 100자 이내로 입력해 주세요.");
             if (exclusions.length() > 0) put(answer, "avoidIngredients", exclusions);
             String sleep = hours.getText().toString().trim();
             if (!sleep.isEmpty()) {
@@ -883,7 +1026,8 @@ public final class MainActivity extends Activity {
                     throw new IllegalArgumentException("수면 시간은 0~14시간으로 입력해 주세요.");
                 put(answer, "sleepHours", Integer.parseInt(sleep));
             }
-            JSONArray used = commaSeparated(products, 5, 30, "제품은 5개까지, 이름은 30자 이내로 입력해 주세요.");
+            answer.remove("currentProducts");
+            JSONArray used = commaSeparated(products, "currentProducts", 5, 30, "제품은 5개까지, 이름은 30자 이내로 입력해 주세요.");
             if (used.length() > 0) put(answer, "currentProducts", used);
             String extra = note.getText().toString().trim();
             if (extra.length() > 300) throw new IllegalArgumentException("추가 내용은 300자 이내로 입력해 주세요.");
@@ -953,6 +1097,13 @@ public final class MainActivity extends Activity {
             });
         });
         container.addView(row);
+        if ("history".equals(back)) container.addView(link("기록 삭제", () ->
+                new AlertDialog.Builder(this).setMessage("이 분석 기록을 삭제할까요? 삭제한 기록은 되돌릴 수 없어요.")
+                        .setNegativeButton("취소", null)
+                        .setPositiveButton("삭제", (dialog, which) -> task(() -> {
+                            api.deleteAnalysis(item.getString("analysisId"));
+                            return true;
+                        }, ok -> history(1))).show()));
     }
     private static String stateName(String status) {
         switch(status) {
@@ -961,7 +1112,7 @@ public final class MainActivity extends Activity {
             default: return "상태 확인 필요";
         }
     }
-    private void openReport(JSONObject value) { pollStart=SystemClock.elapsedRealtime(); report(value); }
+    void openReport(JSONObject value) { pollStart=SystemClock.elapsedRealtime(); report(value); }
     static boolean showRecommendation(JSONObject r) {
         JSONObject meta=r.optJSONObject("generation");
         return "COMPLETED".equals(r.optString("status")) && "generated".equals(r.optString("recommendationStatus"))
@@ -999,6 +1150,9 @@ public final class MainActivity extends Activity {
                 }
             }
             result.addView(caption);
+            JSONObject recordedSurvey = value.optJSONObject("survey");
+            if (recordedSurvey != null && "side".equals(recordedSurvey.optString("captureView")))
+                label(result, "측면 사진 · 시험 기능", 14, MUTED, 500, 0, 5);
             label(result, disease.optString("label"), 44, INK, 700, 0, 14);
             label(result, "모델 분류 점수", 13, MUTED, 500, 0, 3);
             double score = disease.optDouble("confidence", 0);
@@ -1170,27 +1324,70 @@ public final class MainActivity extends Activity {
         steps.sort(java.util.Comparator.comparingInt(step -> step.optInt("step", Integer.MAX_VALUE)));
         if (!steps.isEmpty()) {
             label(page, "관리 루틴", 20, INK, 700, 13, 3);
-            LinearLayout timeline = style.column();
-            segment(page, "아침", "저녁", evening, selected -> routine(timeline, steps, selected));
-            page.addView(timeline);
-            routine(timeline, steps, evening);
-            LinearLayout periodic = style.column();
+            java.util.Map<String,List<String>> other = new java.util.HashMap<>();
+            boolean timed = false;
             for (JSONObject step : steps) {
-                String time = step.optString("time");
-                if ("morning".equals(time) || "evening".equals(time) || "daily".equals(time)) continue;
-                label(periodic, step.optString("action"), 15, INK, 400, 5, 3);
+                switch (step.optString("time")) {
+                    case "morning": case "evening": case "daily": timed = true; break;
+                    case "weekly": other.computeIfAbsent("주간 관리", k -> new ArrayList<>()).add(step.optString("action")); break;
+                    case "anytime": other.computeIfAbsent("시간대 무관", k -> new ArrayList<>()).add(step.optString("action")); break;
+                    default: other.computeIfAbsent("기타 관리", k -> new ArrayList<>()).add(step.optString("action"));
+                }
             }
-            if (periodic.getChildCount() > 0) {
+            if (timed) {
+                LinearLayout timeline = style.column();
+                segment(page, "아침", "저녁", evening, selected -> routine(timeline, steps, selected));
+                page.addView(timeline);
+                routine(timeline, steps, evening);
+            }
+            for (String title : new String[]{"주간 관리", "시간대 무관", "기타 관리"}) {
+                if (!other.containsKey(title)) continue;
                 LinearLayout card = card(page, false, 16);
-                label(card, "주기 관리", 14, MUTED, 500, 0, 4);
-                card.addView(periodic);
+                label(card, title, 14, MUTED, 500, 0, 4);
+                for (String action : other.get(title)) label(card, action, 15, INK, 400, 5, 3);
             }
         }
+        careCards(value, ingredients);
         JSONArray reasoning = rec.optJSONArray("reasoning");
         if (reasoning != null && reasoning.length() > 0) lines(disclosure(page, "추천 이유"), reasoning);
         JSONArray notes = rec.optJSONArray("inputNotes");
         if (notes != null && notes.length() > 0) lines(disclosure(page, "이렇게 가정했어요"), notes);
         if (!rec.isNull("disclaimer")) label(page, rec.optString("disclaimer"), 13, MUTED, 400, 10, 0);
+    }
+
+    private void sourceLink(LinearLayout owner, String caption, String url) {
+        owner.addView(link(caption, () -> {
+            try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); }
+            catch (android.content.ActivityNotFoundException unavailable) { notice(url); }
+        }));
+    }
+
+    private void careCards(JSONObject value, JSONArray ingredients) {
+        JSONObject disease = value.optJSONObject("disease");
+        if (disease == null || disease.optBoolean("uncertain", true)) return;
+        CareGuide guides = new CareGuide(this);
+        String name = disease.optString("label");
+        for (String section : new String[]{"care", "diet"}) {
+            JSONObject item = guides.data.optJSONObject(section).optJSONObject(name);
+            boolean general = section.equals("diet") && item == null;
+            if (general) item = guides.data.optJSONObject(section).optJSONObject("general");
+            if (item == null) continue;
+            LinearLayout box = card(page, true, 15);
+            label(box, section.equals("care") ? "일상 관리" : "식습관 메모", 18, INK, 600, 0, 6);
+            label(box, item.optString("body"), 15, INK, 400, 0, 5);
+            sourceLink(box, general ? "세계보건기구 자료" : "미국피부과학회 자료", item.optString("source"));
+        }
+        JSONObject survey = value.optJSONObject("survey");
+        var products = guides.products(ingredients, survey == null ? null : survey.optJSONArray("avoidIngredients"));
+        LinearLayout box = card(page, true, 15);
+        label(box, "추천 성분이 든 제품 예시", 18, INK, 600, 0, 6);
+        if (products.isEmpty()) label(box, "추천 성분과 회피 조건을 함께 확인한 제품이 없어요.", 14, MUTED, 400, 0, 0);
+        for (JSONObject product : products) {
+            label(box, product.optString("name"), 16, INK, 600, 6, 2);
+            label(box, "일치한 추천 성분 · " + String.join(", ", guides.matchedNames(product, ingredients)), 14, INK, 500, 1, 2);
+            label(box, product.optString("category") + " · 구매 전 국내 포장의 전성분을 확인해 주세요.", 14, MUTED, 400, 0, 3);
+            sourceLink(box, "제조사 성분표", product.optString("source"));
+        }
     }
 
     private List<JSONObject> objects(JSONArray data) {
@@ -1251,7 +1448,7 @@ public final class MainActivity extends Activity {
                 break;
             case "survey": capture(); break;
             case "optional": survey(); break;
-            case "history": case "my": home(); break;
+            case "history": case "my": case "diary": home(); break;
             case "report": backFromReport(); break;
             case "recommendation": report(currentReport); break;
             default: super.onBackPressed();

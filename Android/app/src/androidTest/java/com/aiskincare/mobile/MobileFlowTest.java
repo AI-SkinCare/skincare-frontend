@@ -21,6 +21,109 @@ import java.util.concurrent.atomic.AtomicReference;
 @SuppressWarnings("deprecation")
 public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainActivity> {
     public MobileFlowTest() { super(MainActivity.class); }
+    public void testSharedSideResultShowsUntimedCare() throws Exception {
+        JSONObject item;
+        try (var stream = getInstrumentation().getContext().getAssets().open("parity-side-result.json");
+             var reader = new java.util.Scanner(stream, "UTF-8").useDelimiter("\\A")) {
+            item = new JSONObject(reader.next());
+        }
+        MainActivity app = getActivity();
+        onUi(() -> app.openReport(item));
+        await("측면 사진 · 시험 기능", 3000);
+        await("79%", 3000);
+        onUi(() -> click("추천 자세히 보기"));
+        await("글리세린", 3000);
+        await("세라마이드", 3000);
+        await("시간대 무관", 3000);
+        await("자극이 생기면 사용을 중단한다.", 3000);
+        assertFalse(hasText("아침"));
+        assertFalse(hasText("주간 관리"));
+    }
+    public void testSideFaceAcceptsEitherDirectionAndRejectsFrontal() throws Exception {
+        try (var side = getInstrumentation().getContext().getAssets().open("fictional-side-face.jpg")) {
+            Bitmap bitmap = android.graphics.BitmapFactory.decodeStream(side);
+            for (int direction : new int[]{1, -1}) {
+                android.graphics.Matrix transform = new android.graphics.Matrix();
+                transform.setScale(direction, 1);
+                Bitmap image = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), transform, true);
+                var encoded = new java.io.ByteArrayOutputStream();
+                image.compress(Bitmap.CompressFormat.JPEG, 90, encoded);
+                Photo.decode(android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(encoded.toByteArray()))).requireSideFace();
+            }
+        }
+        try (var front = getInstrumentation().getContext().getAssets().open("fictional-frontal-face.jpg")) {
+            var data = new java.io.ByteArrayOutputStream();
+            byte[] buffer = new byte[8192];
+            int count;
+            while ((count = front.read(buffer)) != -1) data.write(buffer, 0, count);
+            Photo face = Photo.decode(android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(data.toByteArray())));
+            face.requireOneFace();
+            try { face.requireSideFace(); fail("Frontal photo accepted as side"); }
+            catch (IllegalArgumentException expected) { assertTrue(expected.getMessage().contains("정면")); }
+        }
+    }
+
+    public void testCatalogRequiresIngredientAndKnownExclusions() throws Exception {
+        var catalog = new CareGuide(getInstrumentation().getTargetContext());
+        var names = new org.json.JSONArray().put(new JSONObject().put("name", "Zinc Oxide"));
+        assertEquals(1, catalog.products(names, new org.json.JSONArray()).size());
+        assertEquals(1, catalog.products(names, new org.json.JSONArray().put("향료")).size());
+        assertTrue(catalog.products(names, null).isEmpty());
+        assertTrue(catalog.products(names, new org.json.JSONArray().put("GLYCERIN")).isEmpty());
+        assertTrue(catalog.products(names, new org.json.JSONArray().put("알 수 없는 성분")).isEmpty());
+        assertTrue(catalog.products(new org.json.JSONArray(), new org.json.JSONArray()).isEmpty());
+    }
+
+    public void testDailyDiaryEditsGapAndAccountIsolation() throws Exception {
+        var context = getInstrumentation().getTargetContext();
+        var settings = context.getSharedPreferences("MainActivity", 0);
+        String previousServer = settings.getString("spring", null);
+        settings.edit().putString("spring", "http://10.0.2.2:1/api/v1").commit();
+        var app = getActivity();
+        var owner = new JSONObject().put("id", 87234101);
+        var other = new JSONObject().put("id", 87234102);
+        String earlier = java.time.LocalDate.now().minusDays(3).toString();
+        try {
+            onUi(() -> {
+                app.signedIn("diary@example.invalid", owner);
+                app.journal().edit().clear().putString(earlier, "{\"score\":4,\"product\":\"\"}").commit();
+                click("매일 피부 기록");
+                views(Spinner.class).get(0).setSelection(8);
+                views(EditText.class).get(0).setText("샘플 보습제");
+                click("오늘 기록 저장");
+            });
+            await(earlier + " 대비 3점 상승", 4000);
+            await("사용 제품 · 샘플 보습제", 4000);
+            onUi(() -> { views(Spinner.class).get(0).setSelection(4); click("오늘 기록 수정"); });
+            await(earlier + " 대비 1점 하락", 4000);
+            assertEquals(2, app.journal().getAll().size());
+            onUi(() -> { app.signedIn("other@example.invalid", other); click("매일 피부 기록"); });
+            await("첫 기록부터 날짜별로 쌓여요.", 4000);
+            onUi(() -> { app.signedIn("diary@example.invalid", owner); click("매일 피부 기록"); });
+            await(earlier + " 대비 1점 하락", 4000);
+        } finally {
+            onUi(() -> { app.signedIn("diary@example.invalid", owner); app.journal().edit().clear().commit(); });
+            settings.edit().putString("spring", previousServer).commit();
+        }
+    }
+
+    public void testResultShowsCareDietAndMatchedProductOnlyAfterGeneration() throws Exception {
+        var input = new JSONObject().put("status", "COMPLETED").put("recommendationStatus", "generated")
+                .put("disease", new JSONObject().put("label", "여드름").put("uncertain", false))
+                .put("survey", new JSONObject().put("avoidIngredients", new org.json.JSONArray()))
+                .put("recommendation", new JSONObject().put("ingredients", new org.json.JSONArray()
+                        .put(new JSONObject().put("name", "징크옥사이드"))));
+        var app = getActivity();
+        onUi(() -> { app.openReport(input); click("추천 자세히 보기"); });
+        await("일상 관리", 2000);
+        await("식습관 메모", 2000);
+        await("일치한 추천 성분 · 징크옥사이드", 2000);
+        await("제조사 성분표", 2000);
+        input.put("generation", new JSONObject().put("origin", "not_generated"));
+        onUi(() -> app.openReport(input));
+        assertFalse(hasText("추천 자세히 보기"));
+        assertFalse(hasText("제조사 성분표"));
+    }
     public void testAlternateBackendRequiresHttpsAndApiPath() {
         assertTrue(MainActivity.validServer("https://backend.example.org:9443/api/v1"));
         assertFalse(MainActivity.validServer("http://backend.example.org/api/v1"));
@@ -70,7 +173,9 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
     }
 
     // Run only against a disposable localhost Spring database with the real or fixture AI attached.
-    public void testLocalSpringFlow() throws Exception {
+    public void testLocalSpringFlow() throws Exception { checkLocalSpringFlow(false); }
+    public void testLocalSpringSideFlow() throws Exception { checkLocalSpringFlow(true); }
+    private void checkLocalSpringFlow(boolean side) throws Exception {
         assertEquals("http://10.0.2.2:3000/api/v1", BuildConfig.SPRING_URL);
         MainActivity app=getActivity();
         String email="android-"+UUID.randomUUID()+"@example.invalid";
@@ -88,6 +193,7 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             onUi(()->click("피부 분석 시작"));
             if (hasText("촬영 화면으로")) onUi(()->click("촬영 화면으로"));
             await("얼굴 사진을 준비해 주세요.",5000);
+            if (side) onUi(()->click("측면"));
             onUi(()->assertFalse(button("다음").isEnabled()));
             Bitmap sample=Bitmap.createBitmap(840,800,Bitmap.Config.ARGB_8888);
             sample.eraseColor(0xffb9cecd);
@@ -102,7 +208,8 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             flat.reset(); sample.compress(Bitmap.CompressFormat.PNG,100,flat);
             assertFaceRejected(flat.toByteArray());
             byte[] portrait;
-            try(java.io.InputStream asset=getInstrumentation().getContext().getAssets().open("fictional-frontal-face.jpg");
+            String assetName=side ? "fictional-side-face.jpg" : "fictional-frontal-face.jpg";
+            try(java.io.InputStream asset=getInstrumentation().getContext().getAssets().open(assetName);
                 java.io.ByteArrayOutputStream loaded=new java.io.ByteArrayOutputStream()) {
                 byte[] chunk=new byte[8192]; int n;
                 while((n=asset.read(chunk))!=-1) loaded.write(chunk,0,n);
@@ -159,7 +266,7 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             if (hasText("완료")) {
                 onUi(()->click("추천 자세히 보기"));
                 await("추천 성분",5000);
-                if (hasText("관리 루틴")) onUi(()->{ click("저녁"); assertTrue(button("저녁").isSelected()); });
+                if (hasText("저녁")) onUi(()->{ click("저녁"); assertTrue(button("저녁").isSelected()); });
                 onUi(()->getActivity().onBackPressed());
                 await("분석 결과",5000);
             }
@@ -170,6 +277,11 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             accessToken.set(account, "expired-for-refresh-test");
             JSONObject item=account.history(1).getJSONArray("items").getJSONObject(0);
             JSONObject detail=account.detail(item.getString("analysisId"));
+            assertEquals(side ? "side":"front",detail.getJSONObject("survey").getString("captureView"));
+            if (side) {
+                assertEquals("dinov2_linear_875acf74c4",detail.getJSONObject("disease").getString("modelVersion"));
+                assertEquals("generated",detail.getString("recommendationStatus"));
+            }
             assertTrue(detail.getJSONObject("disease").has("confidence"));
             assertEquals("30s",detail.getJSONObject("survey").getString("ageBand"));
             JSONObject symptom = detail.getJSONObject("survey").getJSONObject("symptomProfile");
@@ -180,10 +292,30 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             if("COMPLETED".equals(detail.getString("status"))) assertTrue(MainActivity.showRecommendation(detail));
             else assertEquals("WITHHELD",detail.getString("status"));
             android.util.Log.i("SkinCareTest","status="+detail.getString("status")+"; recommendation="+detail.optString("recommendationStatus"));
+            onUi(()->click("기록 삭제"));
+            var automation=getInstrumentation().getUiAutomation();
+            android.view.accessibility.AccessibilityNodeInfo confirm=null;
+            for(int attempt=0;attempt<30 && confirm==null;attempt++) {
+                var dialog=automation.getRootInActiveWindow();
+                if (dialog!=null) for(var node:dialog.findAccessibilityNodeInfosByText("삭제"))
+                    if ("삭제".contentEquals(node.getText()==null ? "" : node.getText()) && node.isClickable()) confirm=node;
+                if(confirm==null) SystemClock.sleep(100);
+            }
+            assertNotNull("history deletion confirmation",confirm);
+            assertTrue(confirm.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK));
+            await("아직 분석 기록이 없어요.",10000);
+            assertEquals(0,account.history(1).getJSONArray("items").length());
+            var saved=new RefreshStore(app,BuildConfig.SPRING_URL);
+            assertTrue(saved.hasSession());
+            SpringClient reopened=new SpringClient(BuildConfig.SPRING_URL,saved);
+            assertEquals(email,reopened.restore().getString("email"));
+            reopened.logout();
+            assertFalse(saved.hasSession());
         } finally {
             if(input.exists()) assertTrue(input.delete());
             account.login(email,password);
             account.deleteAccount();
+            new RefreshStore(app,BuildConfig.SPRING_URL).clear();
         }
     }
     private void assertFaceRejected(byte[] image) throws Exception {

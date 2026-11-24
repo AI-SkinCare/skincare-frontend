@@ -52,6 +52,7 @@ struct RecommendationView: View {
                 SummaryHeader(recommendation: recommendation)
                 IngredientsSection(ingredients: recommendation.ingredients ?? [])
                 RoutineSection(steps: recommendation.routine ?? [])
+                if let analysis { CareGuideSection(analysis: analysis) }
                 ReasoningSection(paragraphs: recommendation.reasoning ?? [])
                 if let notes = recommendation.inputNotes, !notes.isEmpty {
                     AssumptionsSection(notes: notes)
@@ -129,35 +130,32 @@ private struct IngredientsSection: View {
 
 // MARK: - 관리 루틴
 
-/// 아침/저녁 탭. daily는 두 탭 모두, weekly·anytime은 "주기 관리" 묶음 (SCR-09). 비어 있으면 숨김.
+/// daily는 아침과 저녁에 표시한다. 나머지는 서버가 지정한 사용 주기에 따라 표시한다.
 private struct RoutineSection: View {
     let steps: [RoutineStep]
     @State private var tab: RoutineTime = .morning
 
     private var morning: [RoutineStep] { steps.filter { $0.time == .morning || $0.time == .daily } }
     private var evening: [RoutineStep] { steps.filter { $0.time == .evening || $0.time == .daily } }
-    private var periodic: [RoutineStep] { steps.filter { $0.time == .weekly || $0.time == .anytime } }
 
     var body: some View {
         if !steps.isEmpty {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 SectionTitle(title: "관리 루틴")
-                PillSegmentedControl(options: [(RoutineTime.morning, "아침"), (RoutineTime.evening, "저녁")], selection: $tab)
-                RoutineTimeline(items: tab == .morning ? morning : evening)
-                    .id(tab)
-                    .transition(.opacity)
-
-                if !periodic.isEmpty {
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("주기 관리").appText(.label).foregroundStyle(.textMuted)
-                        ForEach(periodic) { item in
-                            HStack(spacing: Spacing.sm) {
-                                Image(systemName: "calendar").font(.system(size: 14)).foregroundStyle(.ink)
-                                Text(item.action).appText(.body).foregroundStyle(.ink)
-                            }
+                if !morning.isEmpty || !evening.isEmpty {
+                    PillSegmentedControl(options: [(RoutineTime.morning, "아침"), (RoutineTime.evening, "저녁")], selection: $tab)
+                    RoutineTimeline(items: tab == .morning ? morning : evening).id(tab)
+                }
+                ForEach([RoutineTime.weekly, .anytime, .unknown], id: \.self) { time in
+                    let items = steps.filter { $0.time == time }.sorted { $0.step < $1.step }
+                    if !items.isEmpty {
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            Text(time == .weekly ? "주간 관리" : time == .anytime ? "시간대 무관" : "기타 관리")
+                                .appText(.label).foregroundStyle(.textMuted)
+                            ForEach(items) { item in Text(item.action).appText(.body).foregroundStyle(.ink) }
                         }
+                        .card(.soft, padding: Spacing.md, radius: Radius.sm)
                     }
-                    .card(.soft, padding: Spacing.md, radius: Radius.sm)
                 }
             }
         }

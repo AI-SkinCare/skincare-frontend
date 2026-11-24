@@ -43,6 +43,9 @@ struct ReportView: View {
                 ClassificationHero(analysis: analysis)
                 GuidanceBox(lines: analysis.guidance)
                 ScoreBreakdown(disease: analysis.disease)
+                if analysis.survey?.captureView == "side" {
+                    Text("측면 사진 · 시험 기능").appText(.caption)
+                }
                 ClassificationExplanationCard(disease: analysis.disease)
                 RecommendationSection(model: model, analysis: analysis)
             }

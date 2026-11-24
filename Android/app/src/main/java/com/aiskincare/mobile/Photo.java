@@ -11,6 +11,20 @@ final class Photo {
     private Photo(Bitmap preview, byte[] jpeg) { this.preview = preview; this.jpeg = jpeg; }
 
     // Run on the photo worker after EXIF orientation correction, before advancing to the survey.
+    void requireSideFace() throws Exception {
+        var options = new com.google.mlkit.vision.face.FaceDetectorOptions.Builder()
+                .setPerformanceMode(com.google.mlkit.vision.face.FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+                .build();
+        try (var detector = com.google.mlkit.vision.face.FaceDetection.getClient(options)) {
+            var image = com.google.mlkit.vision.common.InputImage.fromBitmap(preview, 0);
+            var faces = com.google.android.gms.tasks.Tasks.await(detector.process(image));
+            if (faces.size() != 1 || faces.get(0).getBoundingBox().width() < preview.getWidth() * .18f)
+                throw new IllegalArgumentException("한 사람의 얼굴 전체와 한쪽 볼이 보이게 다시 찍어 주세요.");
+            if (Math.abs(faces.get(0).getHeadEulerAngleY()) < 20)
+                throw new IllegalArgumentException("정면에 가까운 사진이에요. 측면 모드에서는 얼굴을 한쪽으로 조금 더 돌려 주세요.");
+        }
+    }
+
     void requireOneFace() {
         float ratio=Math.min(1f,640f/Math.max(preview.getWidth(),preview.getHeight()));
         int w=Math.max(2,Math.round(preview.getWidth()*ratio) & ~1);

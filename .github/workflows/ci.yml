@@ -2,7 +2,7 @@ name: ci
 
 on:
   pull_request:
-    branches: [develop, main]
+    branches: [develop, main, chore/ios-project-setup]
   push:
     branches: [develop, main]
 
