@@ -5,11 +5,13 @@ struct CareCatalog: Decodable {
     struct Product: Decodable {
         let name, category: String
         let matches, absent: [String]
+        let labelNames: [String: String]
         let source: URL
     }
     let care, diet: [String: Advice]
     let aliases: [String: [String]]
     let products: [Product]
+    let generalSources: [String: EvidenceSource]
 
     static let bundled: Self? = {
         #if SWIFT_PACKAGE

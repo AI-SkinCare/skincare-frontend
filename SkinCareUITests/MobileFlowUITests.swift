@@ -24,6 +24,20 @@ final class MobileFlowUITests: XCTestCase {
     }
 
     @MainActor
+    func testHistoricalIngredientHasLabeledGeneralSource() {
+        let app = launch("recommendation")
+        let button = app.buttons.containing(NSPredicate(format: "label CONTAINS %@", "세라마이드 근거 보기")).firstMatch
+        for _ in 0..<6 {
+            if button.exists && button.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(button.isHittable)
+        button.tap()
+        XCTAssertTrue(app.staticTexts["일반 참고자료"].firstMatch.waitForExistence(timeout: 4))
+        XCTAssertTrue(app.staticTexts["이 결과에는 성분별 출처가 저장되어 있지 않아요."].firstMatch.exists)
+    }
+
+    @MainActor
     func testWithheldReportHasNoRecommendationLink() {
         let app = launch("report-no-concern")
         XCTAssertTrue(app.navigationBars["분석 결과"].waitForExistence(timeout: 15))

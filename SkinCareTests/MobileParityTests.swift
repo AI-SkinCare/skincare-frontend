@@ -17,6 +17,11 @@ struct MobileParityTests {
         #expect(result.disease.modelVersion == "dinov2_linear_875acf74c4")
         #expect(result.disease.confidencePercent == "79%")
         #expect(result.recommendation?.ingredients?.map(\.name) == ["글리세린", "세라마이드"])
+        let evidence = try #require(result.recommendation?.ingredients?.first?.evidence)
+        #expect(evidence.canDisplay && evidence.claimId == "E_GLY_MOIST")
+        #expect(evidence.usageConditions.contains("무향의 완제품 보습제를 제품 표시대로 사용한다."))
+        #expect(evidence.sources.contains { $0.webURL?.absoluteString == "https://pubmed.ncbi.nlm.nih.gov/18025807/" })
+        #expect(result.recommendation?.ingredients?.last?.evidence == nil)
         #expect(result.recommendation?.routine?.map(\.time) == [.anytime, .anytime])
         let survey = try #require(result.survey)
         #expect(survey.captureView == "side")
@@ -24,10 +29,21 @@ struct MobileParityTests {
         #expect(next.captureView == nil && next.symptomProfile == nil)
         #expect(next.concerns == [.dryness] && next.skinType == .dry)
         let catalog = try #require(CareCatalog.bundled)
+        #expect(catalog.generalSources[catalog.key("ceramide NP")]?.webURL?.lastPathComponent == "33984185")
+        #expect(catalog.matched(["글리세롤"], avoiding: []).first?.labelNames["글리세린"] == "glycerin")
         #expect(catalog.care["여드름"] != nil && catalog.diet["general"] != nil)
         #expect(!catalog.matched(["Zinc Oxide"], avoiding: []).isEmpty)
         #expect(catalog.matched(["Zinc Oxide"], avoiding: ["GLYCERIN"]).isEmpty)
         #expect(catalog.matched(["Zinc Oxide"], avoiding: nil).isEmpty)
+    }
+
+    @Test func malformedEvidenceStillDisplaysTheIngredient() throws {
+        let raw = Data(#"{"name":"글리세린","priority":1,"evidence":{"usageConditions":"wrong"}}"#.utf8)
+        let ingredient = try JSONDecoder().decode(Ingredient.self, from: raw)
+        #expect(ingredient.name == "글리세린" && ingredient.evidence == nil)
+        for url in ["file:///tmp/file", "http://example.org", "https://user@example.org", "/relative"] {
+            #expect(EvidenceSource(title: "원문", url: url, summary: nil).webURL == nil)
+        }
     }
 
     @Test func bothServersMustBeReadyForSideUpload() throws {

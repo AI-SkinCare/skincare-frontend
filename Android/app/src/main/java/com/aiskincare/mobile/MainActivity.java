@@ -483,6 +483,7 @@ public final class MainActivity extends Activity {
         });
         label(page, "날짜별 변화", 20, INK, 700, 15, 3);
         label(page, "점수는 내가 느낀 편안함이에요. 이 기기의 내 계정에 저장됩니다.", 14, MUTED, 400, 0, 9);
+        label(page, "변화량은 오늘 입력한 점수에서 직전 기록의 점수를 뺀 값이에요. 사용 제품은 메모로만 보관해요.", 14, MUTED, 400, 0, 6);
         if (entries.isEmpty()) label(page, "첫 기록부터 날짜별로 쌓여요.", 15, MUTED, 400, 6, 10);
         for (var item : entries.entrySet()) {
             JSONObject entry = item.getValue();
@@ -497,6 +498,10 @@ public final class MainActivity extends Activity {
             label(row, item.getKey() + "   " + points + "/10", 17, INK, 600, 0, 2);
             meter(row, points / 10.0);
             label(row, change, 14, MUTED, 400, 0, 2);
+            if (previous != null) {
+                int prior = previous.getValue().optInt("score");
+                label(row, points + "점 − " + prior + "점 = " + (points - prior) + "점", 14, MUTED, 400, 0, 2);
+            }
             if (!entry.optString("product").isEmpty()) label(row, "사용 제품 · " + entry.optString("product"), 14, INK, 400, 1, 0);
             row.addView(link("기록 삭제", () -> new AlertDialog.Builder(this).setMessage(item.getKey() + " 기록을 지울까요?")
                     .setNegativeButton("취소", null).setPositiveButton("삭제", (dialog, which) -> {
@@ -1354,6 +1359,7 @@ public final class MainActivity extends Activity {
         JSONObject metadata = report.optJSONObject("generation");
         if (metadata == null) return "";
         return switch (metadata.optString("origin")) {
+            case "model" -> "AI가 작성한 추천이에요. 성분을 펼치면 출처가 저장됐는지 확인할 수 있어요.";
             case "source_cards" -> "근거 자료를 바탕으로 구성한 대체 안내예요.";
             case "rule_fallback" -> "기본 관리 규칙으로 구성한 대체 안내예요.";
             default -> "";
@@ -1389,6 +1395,9 @@ public final class MainActivity extends Activity {
             label(summary, answer, 17, INK, 400, 0, 0);
         }
         label(page, "추천 성분", 20, INK, 700, 12, 3);
+        CareGuide guides = new CareGuide(this);
+        JSONObject metadata = value.optJSONObject("generation");
+        boolean sourceLinked = metadata != null && "source_linked".equals(metadata.optString("evidenceStatus"));
         JSONArray ingredients = rec.optJSONArray("ingredients");
         if (ingredients != null && ingredients.length() > 0) {
             label(page, "우선순위 순", 13, MUTED, 400, 0, 9);
@@ -1396,8 +1405,10 @@ public final class MainActivity extends Activity {
             sorted.sort(java.util.Comparator.comparingInt(i -> i.optInt("priority", Integer.MAX_VALUE)));
             for (int i = 0; i < sorted.size(); i++) {
                 JSONObject item = sorted.get(i);
-                numberedRow(card(page, true, 12), i + 1, item.optString("name"),
+                LinearLayout box = card(page, true, 12);
+                numberedRow(box, i + 1, item.optString("name"),
                         item.isNull("purpose") ? "" : item.optString("purpose"), SOFT);
+                ingredientEvidence(box, item, sourceLinked, guides);
             }
         } else label(page, "맞춤 성분을 찾지 못했어요. 추천 이유를 확인해 주세요.", 14, MUTED, 400, 0, 7);
         List<JSONObject> steps = objects(rec.optJSONArray("routine"));
@@ -1427,7 +1438,7 @@ public final class MainActivity extends Activity {
                 for (String action : other.get(title)) label(card, action, 15, INK, 400, 5, 3);
             }
         }
-        careCards(value, ingredients);
+        careCards(value, ingredients, guides);
         JSONArray reasoning = rec.optJSONArray("reasoning");
         if (reasoning != null && reasoning.length() > 0) lines(disclosure(page, "추천 이유"), reasoning);
         JSONArray notes = rec.optJSONArray("inputNotes");
@@ -1435,17 +1446,57 @@ public final class MainActivity extends Activity {
         if (!rec.isNull("disclaimer")) label(page, rec.optString("disclaimer"), 13, MUTED, 400, 10, 0);
     }
 
+    private static boolean validCitation(String value) {
+        try {
+            java.net.URI uri = java.net.URI.create(value);
+            return "https".equalsIgnoreCase(uri.getScheme()) && uri.getHost() != null && uri.getUserInfo() == null;
+        } catch (IllegalArgumentException malformed) { return false; }
+    }
+
+    private void ingredientEvidence(LinearLayout box, JSONObject item, boolean sourceLinked, CareGuide guides) {
+        String name = item.optString("name");
+        LinearLayout detail = disclosure(box, name + " 근거 보기");
+        JSONObject evidence = item.optJSONObject("evidence");
+        if (sourceLinked && evidence != null && !evidence.optString("claimId", "").isBlank()
+                && !evidence.optString("effect", "").isBlank() && !evidence.optString("limitations", "").isBlank()) {
+            List<JSONObject> sources = objects(evidence.optJSONArray("sources"));
+            sources.removeIf(s -> s.optString("title", "").isBlank() || !validCitation(s.optString("url", "")));
+            JSONArray conditions = evidence.optJSONArray("usageConditions");
+            if (!sources.isEmpty() && conditions != null && conditions.length() > 0) {
+                label(detail, "이번 추천에 연결된 근거", 15, INK, 600, 3, 2);
+                label(detail, evidence.optString("effect"), 14, INK, 400, 2, 5);
+                label(detail, "사용 조건", 14, INK, 600, 3, 2);
+                lines(detail, conditions);
+                label(detail, "근거의 한계", 14, INK, 600, 3, 2);
+                label(detail, evidence.optString("limitations"), 14, MUTED, 400, 2, 5);
+                for (JSONObject s : sources) citation(detail, s);
+                return;
+            }
+        }
+        label(detail, "이 결과에는 성분별 출처가 저장되어 있지 않아요.", 14, MUTED, 400, 3, 3);
+        JSONObject general = guides.generalSource(name);
+        if (general != null) {
+            label(detail, "일반 참고자료", 14, INK, 600, 3, 2);
+            citation(detail, general);
+        }
+    }
+
+    private void citation(LinearLayout detail, JSONObject source) {
+        sourceLink(detail, source.optString("title"), source.optString("url"));
+        if (!source.isNull("summary")) label(detail, source.optString("summary"), 14, MUTED, 400, 0, 5);
+    }
+
     private void sourceLink(LinearLayout owner, String caption, String url) {
+        if (!validCitation(url)) return;
         owner.addView(link(caption, () -> {
             try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); }
             catch (android.content.ActivityNotFoundException unavailable) { notice(url); }
         }));
     }
 
-    private void careCards(JSONObject value, JSONArray ingredients) {
+    private void careCards(JSONObject value, JSONArray ingredients, CareGuide guides) {
         JSONObject disease = value.optJSONObject("disease");
         if (disease == null || disease.optBoolean("uncertain", true)) return;
-        CareGuide guides = new CareGuide(this);
         String name = disease.optString("label");
         for (String section : new String[]{"care", "diet"}) {
             JSONObject item = guides.data.optJSONObject(section).optJSONObject(name);
@@ -1455,16 +1506,27 @@ public final class MainActivity extends Activity {
             LinearLayout box = card(page, true, 15);
             label(box, section.equals("care") ? "일상 관리" : "식습관 메모", 18, INK, 600, 0, 6);
             label(box, item.optString("body"), 15, INK, 400, 0, 5);
+            String reason = general ? "이 분류에는 별도의 식습관 자료가 없어 일반 식생활 지침을 표시해요."
+                    : "사진의 ‘" + name + "’ 분류에 연결한 자료예요." + (section.equals("diet") ? " 설문에는 식사 기록이 없어요." : "");
+            label(box, reason, 14, MUTED, 400, 0, 3);
             sourceLink(box, general ? "세계보건기구 자료" : "미국피부과학회 자료", item.optString("source"));
         }
         JSONObject survey = value.optJSONObject("survey");
-        var products = guides.products(ingredients, survey == null ? null : survey.optJSONArray("avoidIngredients"));
+        JSONArray avoid = survey == null ? null : survey.optJSONArray("avoidIngredients");
+        var products = guides.products(ingredients, avoid);
         LinearLayout box = card(page, true, 15);
         label(box, "추천 성분이 든 제품 예시", 18, INK, 600, 0, 6);
-        if (products.isEmpty()) label(box, "추천 성분과 회피 조건을 함께 확인한 제품이 없어요.", 14, MUTED, 400, 0, 0);
+        if (products.isEmpty()) label(box, avoid == null ? "이 기록에는 회피 성분 응답이 없어 제품을 표시하지 않아요." : "추천 성분과 회피 조건을 함께 확인한 제품이 없어요.", 14, MUTED, 400, 0, 0);
         for (JSONObject product : products) {
             label(box, product.optString("name"), 16, INK, 600, 6, 2);
-            label(box, "일치한 추천 성분 · " + String.join(", ", guides.matchedNames(product, ingredients)), 14, INK, 500, 1, 2);
+            var matches = guides.matchedNames(product, ingredients);
+            label(box, "일치한 추천 성분 · " + String.join(", ", matches), 14, INK, 500, 1, 2);
+            List<String> labels = new ArrayList<>();
+            for (String matched : matches) labels.add(product.optJSONObject("labelNames").optString(matched));
+            label(box, "제조사 표기 · " + String.join(" / ", labels), 14, MUTED, 400, 1, 2);
+            List<String> avoided = new ArrayList<>();
+            for (int i = 0; i < avoid.length(); i++) avoided.add(avoid.optString(i));
+            label(box, avoided.isEmpty() ? "설문에 등록한 회피 성분이 없어요." : "성분표에서 제외를 확인한 설문 성분 · " + String.join(", ", avoided), 14, MUTED, 400, 1, 2);
             label(box, product.optString("category") + " · 구매 전 국내 포장의 전성분을 확인해 주세요.", 14, MUTED, 400, 0, 3);
             sourceLink(box, "제조사 성분표", product.optString("source"));
         }

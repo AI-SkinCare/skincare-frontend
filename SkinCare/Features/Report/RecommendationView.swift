@@ -50,7 +50,8 @@ struct RecommendationView: View {
                     Text(notice).appText(.bodySmall).foregroundStyle(.textMuted)
                 }
                 SummaryHeader(recommendation: recommendation)
-                IngredientsSection(ingredients: recommendation.ingredients ?? [])
+                IngredientsSection(ingredients: recommendation.ingredients ?? [],
+                                   sourceLinked: analysis?.generation?.evidenceStatus == "source_linked")
                 RoutineSection(steps: recommendation.routine ?? [])
                 if let analysis { CareGuideSection(analysis: analysis) }
                 ReasoningSection(paragraphs: recommendation.reasoning ?? [])
@@ -94,6 +95,7 @@ private struct SummaryHeader: View {
 
 private struct IngredientsSection: View {
     let ingredients: [Ingredient]
+    let sourceLinked: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -117,13 +119,42 @@ private struct IngredientsSection: View {
                             Text(purpose).appText(.bodySmall).foregroundStyle(.textMuted)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
+                        DisclosureGroup("\(ingredient.name) 근거 보기") {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
+                                if sourceLinked, let evidence = ingredient.evidence, evidence.canDisplay {
+                                    Text("이번 추천에 연결된 근거").bold()
+                                    Text(evidence.effect)
+                                    Text("사용 조건").bold()
+                                    ForEach(evidence.usageConditions, id: \.self) { Text($0) }
+                                    Text("근거의 한계").bold()
+                                    Text(evidence.limitations)
+                                    ForEach(Array(evidence.sources.enumerated()), id: \.offset) { _, item in
+                                        source(item)
+                                    }
+                                } else {
+                                    Text("이 결과에는 성분별 출처가 저장되어 있지 않아요.")
+                                    if let catalog = CareCatalog.bundled,
+                                       let item = catalog.generalSources[catalog.key(ingredient.name)] {
+                                        Text("일반 참고자료").bold()
+                                        source(item)
+                                    }
+                                }
+                            }.font(.footnote).frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                     .padding(.top, 5)
                     Spacer(minLength: 0)
                 }
                 .card(.outlined, padding: Spacing.md, radius: Radius.sm)
-                .accessibilityElement(children: .combine)
+                .accessibilityElement(children: .contain)
             }
+        }
+    }
+
+    @ViewBuilder private func source(_ item: EvidenceSource) -> some View {
+        if let url = item.webURL {
+            Link(item.title, destination: url)
+            if let summary = item.summary, !summary.isEmpty { Text(summary) }
         }
     }
 }

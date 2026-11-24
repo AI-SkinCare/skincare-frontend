@@ -86,6 +86,7 @@ struct DailySkinJournal: View {
             if let error { Text(error) }
             Section("날짜별 변화") {
                 Text("점수는 내가 느낀 편안함이에요. 이 기기의 내 계정에 저장됩니다.").font(.footnote)
+                Text("변화량은 오늘 입력한 점수에서 직전 기록의 점수를 뺀 값이에요. 사용 제품은 메모로만 보관해요.").font(.footnote)
                 if days.isEmpty { Text("첫 기록부터 날짜별로 쌓여요.") }
                 ForEach(Array(days.enumerated()), id: \.element) { index, day in
                     if let entry = entries[day] {
@@ -96,6 +97,7 @@ struct DailySkinJournal: View {
                                 let diff = entry.score - previous.score
                                 let change = diff == 0 ? "같음" : "\(abs(diff))점 " + (diff > 0 ? "상승" : "하락")
                                 Text("\(days[index + 1]) 대비 \(change)")
+                                Text("\(entry.score)점 − \(previous.score)점 = \(diff)점").font(.footnote)
                             } else { Text("첫 기록") }
                             if !entry.product.isEmpty { Text("사용 제품 · " + entry.product) }
                         }.swipeActions {

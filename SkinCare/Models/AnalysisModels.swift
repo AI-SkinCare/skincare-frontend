@@ -245,6 +245,7 @@ struct GenerationMetadata: Decodable, Sendable {
 
     var sourceNotice: String? {
         switch origin {
+        case .model: "AI가 작성한 추천이에요. 성분을 펼치면 출처가 저장됐는지 확인할 수 있어요."
         case .sourceCards: "근거 자료를 바탕으로 구성한 대체 안내예요. 모델이 생성한 답변과 구별해 제공해요."
         case .ruleFallback: "기본 관리 규칙으로 구성한 대체 안내예요."
         default: nil
@@ -277,8 +278,47 @@ struct Ingredient: Decodable, Sendable, Identifiable {
     let priority: Int
     var purposeSource: String?
     var purposeStatus: String?
+    var evidence: IngredientEvidence?
 
     var id: String { "\(priority)-\(name)" }
+}
+
+extension Ingredient {
+    init(from decoder: any Decoder) throws {
+        let fields = try decoder.container(keyedBy: CodingKeys.self)
+        name = try fields.decode(String.self, forKey: .name)
+        priority = try fields.decode(Int.self, forKey: .priority)
+        purpose = try fields.decodeIfPresent(String.self, forKey: .purpose)
+        purposeSource = try fields.decodeIfPresent(String.self, forKey: .purposeSource)
+        purposeStatus = try fields.decodeIfPresent(String.self, forKey: .purposeStatus)
+        evidence = try? fields.decode(IngredientEvidence.self, forKey: .evidence)
+    }
+
+    private enum CodingKeys: String, CodingKey { case name, priority, purpose, purposeSource, purposeStatus, evidence }
+}
+
+struct IngredientEvidence: Decodable, Sendable {
+    let claimId: String
+    let version: String?
+    let effect, limitations: String
+    let usageConditions: [String]
+    let sources: [EvidenceSource]
+
+    var canDisplay: Bool {
+        !claimId.isEmpty && !effect.isEmpty && !limitations.isEmpty &&
+        !usageConditions.isEmpty && sources.contains { $0.webURL != nil }
+    }
+}
+
+struct EvidenceSource: Decodable, Sendable {
+    let title, url: String
+    let summary: String?
+
+    var webURL: URL? {
+        guard !title.isEmpty, let link = URLComponents(string: url), link.scheme?.lowercased() == "https",
+              let host = link.host, !host.isEmpty, link.user == nil, link.password == nil else { return nil }
+        return link.url
+    }
 }
 
 struct RoutineStep: Decodable, Sendable, Identifiable {

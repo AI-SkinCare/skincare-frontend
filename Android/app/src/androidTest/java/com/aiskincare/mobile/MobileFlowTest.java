@@ -64,6 +64,15 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
         onUi(() -> click("추천 자세히 보기"));
         await("글리세린", 3000);
         await("세라마이드", 3000);
+        onUi(() -> click("글리세린 근거 보기  ＋"));
+        await("이번 추천에 연결된 근거", 3000);
+        await("근거의 한계", 3000);
+        await("Breternitz et al. 2008, glycerol-based emollient in atopic dermatitis", 3000);
+        onUi(() -> click("세라마이드 근거 보기  ＋"));
+        await("이 결과에는 성분별 출처가 저장되어 있지 않아요.", 3000);
+        await("일반 참고자료", 3000);
+        await("Spada et al. 2021, ceramide-dominant cream and cleanser regimen", 3000);
+        await("이 분류에는 별도의 식습관 자료가 없어 일반 식생활 지침을 표시해요.", 3000);
         await("시간대 무관", 3000);
         await("자극이 생기면 사용을 중단한다.", 3000);
         assertFalse(hasText("아침"));
@@ -123,9 +132,11 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
                 click("오늘 기록 저장");
             });
             await(earlier + " 대비 3점 상승", 4000);
+            await("7점 − 4점 = 3점", 4000);
             await("사용 제품 · 샘플 보습제", 4000);
             onUi(() -> { views(Spinner.class).get(0).setSelection(4); click("오늘 기록 수정"); });
             await(earlier + " 대비 1점 하락", 4000);
+            await("3점 − 4점 = -1점", 4000);
             assertEquals(2, app.journal().getAll().size());
             onUi(() -> { app.signedIn("other@example.invalid", other); click("매일 피부 기록"); });
             await("첫 기록부터 날짜별로 쌓여요.", 4000);
@@ -148,6 +159,8 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
         await("일상 관리", 2000);
         await("식습관 메모", 2000);
         await("일치한 추천 성분 · 징크옥사이드", 2000);
+        await("제조사 표기 · zinc oxide", 2000);
+        await("사진의 ‘여드름’ 분류에 연결한 자료예요. 설문에는 식사 기록이 없어요.", 2000);
         await("제조사 성분표", 2000);
         input.put("generation", new JSONObject().put("origin", "not_generated"));
         onUi(() -> app.openReport(input));

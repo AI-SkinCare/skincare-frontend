@@ -38,6 +38,10 @@ final class CareGuide {
         return false;
     }
 
+    JSONObject generalSource(String ingredient) {
+        return data.optJSONObject("generalSources").optJSONObject(key(ingredient));
+    }
+
     List<JSONObject> products(JSONArray ingredients, JSONArray avoid) {
         List<JSONObject> result = new ArrayList<>();
         if (ingredients == null || avoid == null) return result;
