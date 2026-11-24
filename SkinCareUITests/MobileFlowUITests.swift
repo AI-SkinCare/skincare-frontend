@@ -33,8 +33,13 @@ final class MobileFlowUITests: XCTestCase {
         let field = app.textFields["성분명이나 질문 입력"]
         XCTAssertTrue(field.waitForExistence(timeout: 6))
         field.tap()
-        field.typeText("diary\n")
-        XCTAssertTrue(app.links["답변 출처 · SkinCare"].firstMatch.waitForExistence(timeout: 10))
+        field.typeText("diary")
+        app.buttons["knowledge-search-submit"].tap()
+        let answer = app.staticTexts["사용한 제품과 피부 편안함을 같은 날짜에 기록할 수 있어요."]
+        XCTAssertTrue(answer.firstMatch.waitForExistence(timeout: 10), app.debugDescription)
+        let citation = app.descendants(matching: .any).matching(identifier: "knowledge-answer-source").firstMatch
+        XCTAssertTrue(citation.exists, app.debugDescription)
+        XCTAssertEqual(citation.label, "답변 출처 · SkinCare")
     }
 
     @MainActor

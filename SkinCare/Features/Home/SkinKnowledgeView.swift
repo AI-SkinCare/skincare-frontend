@@ -7,6 +7,7 @@ struct SkinKnowledgeView: View {
     @State private var result: KnowledgeResult?
     @State private var failure: String?
     @State private var loading = false
+    @FocusState private var isEditing: Bool
     private let initialQuery: String
 
     init(query: String = "", kind: String = "guide") {
@@ -24,10 +25,12 @@ struct SkinKnowledgeView: View {
                     Text("제품 라벨").tag("label")
                 }.pickerStyle(.segmented)
                 TextField("성분명이나 질문 입력", text: $query)
+                    .focused($isEditing)
                     .onChange(of: query) { _, value in if value.count > 160 { query = String(value.prefix(160)) } }
                     .submitLabel(.search)
                     .onSubmit { Task { await search() } }
                 Button("검색") { Task { await search() } }
+                    .accessibilityIdentifier("knowledge-search-submit")
                     .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).count < 2)
             }.disabled(loading)
             if loading { ProgressView("자료 검색 중") }
@@ -37,6 +40,7 @@ struct SkinKnowledgeView: View {
                     Text(result.answer)
                     if let source = result.sources.first(where: { $0.id == result.answerSourceId }) {
                         sourceLink(source, "답변 출처 · " + source.publisher)
+                            .accessibilityIdentifier("knowledge-answer-source")
                     }
                     Text("자료 수집일 · " + result.asOf).font(.footnote)
                 }
@@ -64,6 +68,7 @@ struct SkinKnowledgeView: View {
     @MainActor private func search() async {
         let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !loading, term.count >= 2 else { return }
+        isEditing = false
         loading = true
         result = nil
         failure = nil
