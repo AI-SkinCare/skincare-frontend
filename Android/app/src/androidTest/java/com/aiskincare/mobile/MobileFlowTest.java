@@ -257,6 +257,12 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             await("답변 출처 · SkinCare · 앱 계산 방식", 20000);
             onUi(() -> getActivity().onBackPressed());
             await("날짜별 변화", 3000);
+            JSONObject report = new JSONObject().put("status", "COMPLETED")
+                    .put("recommendationStatus", "generated").put("recommendation", new JSONObject())
+                    .put("disease", new JSONObject().put("label", "아토피").put("uncertain", false));
+            onUi(() -> { getActivity().openReport(report); click("추천 자세히 보기"); click("이 관리법의 연구 근거"); });
+            await("답변 출처 · 미국 국립의학도서관 · PubMed Central", 20000);
+            assertPaperClick("Giam 외 · 아토피 피부염의 목욕 후 보습 (2016)", "PMC4850335", "care-paper");
         } finally { account.login(email, password); account.deleteAccount(); }
     }
     public void testLocalSpringSideFlow() throws Exception { checkLocalSpringFlow(true); }
@@ -379,6 +385,8 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             if (side) {
                 assertEquals("dinov2_linear_875acf74c4",detail.getJSONObject("disease").getString("modelVersion"));
                 assertEquals("generated",detail.getString("recommendationStatus"));
+                assertEquals("source_linked", detail.getJSONObject("generation").getString("evidenceStatus"));
+                assertLiveRecommendationPaper(detail);
             }
             assertTrue(detail.getJSONObject("disease").has("confidence"));
             assertEquals("30s",detail.getJSONObject("survey").getString("ageBand"));
@@ -390,6 +398,7 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             if("COMPLETED".equals(detail.getString("status"))) assertTrue(MainActivity.showRecommendation(detail));
             else assertEquals("WITHHELD",detail.getString("status"));
             android.util.Log.i("SkinCareTest","status="+detail.getString("status")+"; recommendation="+detail.optString("recommendationStatus"));
+            await("기록 삭제", 5000);
             onUi(()->click("기록 삭제"));
             var automation=getInstrumentation().getUiAutomation();
             android.view.accessibility.AccessibilityNodeInfo confirm=null;
@@ -414,6 +423,52 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             account.login(email,password);
             account.deleteAccount();
             new RefreshStore(app,BuildConfig.SPRING_URL).clear();
+        }
+    }
+
+    private void assertLiveRecommendationPaper(JSONObject detail) throws Exception {
+        var ingredients = detail.getJSONObject("recommendation").getJSONArray("ingredients");
+        for (String[] expected : new String[][] {
+                {"세라마이드", "Su 외 · 민감성 피부의 세라마이드 NP 함유 크림 (2025)", "PMC12274965"},
+                {"글리세린", "Giam 외 · 아토피 피부염의 목욕 후 보습 (2016)", "PMC4850335"},
+        }) {
+            for (int i = 0; i < ingredients.length(); i++) {
+                JSONObject item = ingredients.getJSONObject(i);
+                if (!expected[0].equals(item.getString("name"))) continue;
+                assertTrue(item.getJSONObject("evidence").getJSONArray("sources").toString().contains(expected[2]));
+                onUi(() -> {
+                    getActivity().openReport(detail);
+                    click("추천 자세히 보기");
+                    click(expected[0] + " 근거 보기  ＋");
+                });
+                await("이번 추천에 연결된 근거", 3000);
+                await("근거의 한계", 3000);
+                assertPaperClick(expected[1], expected[2], "ingredient-paper");
+                onUi(() -> { getActivity().openReport(detail); click("지난 분석 보기"); });
+                return;
+            }
+        }
+        fail("No reviewed paper was carried through the live recommendation");
+    }
+
+    private void assertPaperClick(String caption, String pmcId, String screenshot) throws Exception {
+        onUi(() -> {
+            Button link = button(caption);
+            link.requestRectangleOnScreen(new android.graphics.Rect(0, 0, link.getWidth(), link.getHeight()), true);
+        });
+        captureScreen(screenshot);
+        var filter = new android.content.IntentFilter(Intent.ACTION_VIEW);
+        filter.addDataScheme("https");
+        filter.addDataAuthority("pmc.ncbi.nlm.nih.gov", null);
+        filter.addDataPath("/articles/" + pmcId + "/", android.os.PatternMatcher.PATTERN_LITERAL);
+        var instrumentation = getInstrumentation();
+        var monitor = instrumentation.addMonitor(filter, new android.app.Instrumentation.ActivityResult(Activity.RESULT_OK, null), true);
+        try {
+            onUi(() -> click(caption));
+            assertEquals("Paper link must open its exact PMC full-text URL", 1, monitor.getHits());
+            android.util.Log.i("SkinCareTest", screenshot + " opened " + pmcId);
+        } finally {
+            instrumentation.removeMonitor(monitor);
         }
     }
     private void assertFaceRejected(byte[] image) throws Exception {

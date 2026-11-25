@@ -1581,6 +1581,15 @@ public final class MainActivity extends Activity {
             sourceLink(box, general ? "세계보건기구 자료" : "미국피부과학회 자료", item.optString("source"));
             if (section.equals("diet")) box.addView(link("식습관 자료 더 보기",
                     () -> knowledge(general ? "균형 식단" : name + " 식습관", 0, back)));
+            else {
+                String careQuery = switch (name) {
+                    case "아토피" -> "Giam 아토피 목욕 후 보습";
+                    case "주사" -> "Levin 주사 피부의 순한 세정제";
+                    default -> "";
+                };
+                if (!careQuery.isEmpty())
+                    box.addView(link("이 관리법의 연구 근거", () -> knowledge(careQuery, 0, back)));
+            }
         }
         JSONObject survey = value.optJSONObject("survey");
         JSONArray avoid = survey == null ? null : survey.optJSONArray("avoidIngredients");
