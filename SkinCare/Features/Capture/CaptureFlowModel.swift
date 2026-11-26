@@ -8,6 +8,12 @@ final class CaptureFlowModel {
         case capture, survey
     }
 
+    enum Angle: String, Sendable {
+        case front, side
+
+        var isSide: Bool { self == .side }
+    }
+
     var path: [Step] = []
     /// 흐름 시작 시점의 "다시 보지 않기" 값으로 고정 (도중에 바꿔도 루트가 바뀌지 않게)
     let startsWithGuide: Bool
@@ -16,9 +22,9 @@ final class CaptureFlowModel {
     private(set) var previewImage: UIImage?
     private(set) var imageError: String?
     private(set) var isProcessingImage = false
-    var sideView = false {
+    var captureAngle: Angle? {
         didSet {
-            if sideView != oldValue { discardImage(); imageError = nil }
+            if captureAngle != oldValue { discardImage(); imageError = nil }
         }
     }
     /// E2001(얼굴 미검출, AI 미구현)·E2002로 돌아왔을 때 촬영 화면 상단 배너 (SCR-05)
@@ -52,19 +58,20 @@ final class CaptureFlowModel {
         surveyUnsure = Set((SurveyItem.stepOne + SurveyItem.stepTwo).filter { !survey.isAnswered($0, unsure: []) })
     }
 
-    func handlePickedImage(_ data: Data) async {
-        guard !isProcessingImage else { return }
+    func handlePickedImage(_ data: Data, angle: Angle) async {
+        guard !isProcessingImage, captureAngle == angle else { return }
         image = nil
         previewImage = nil
         isProcessingImage = true
         imageError = nil
         defer { isProcessingImage = false }
 
-        let side = sideView
         let result = await Task.detached(priority: .userInitiated) {
-            Result { () throws(ImageValidationError) -> ProcessedImage in try ImageProcessor.prepareForAnalysis(data, side: side) }
+            Result { () throws(ImageValidationError) -> ProcessedImage in
+                try ImageProcessor.prepareForAnalysis(data, side: angle.isSide)
+            }
         }.value
-        guard side == sideView else { return }
+        guard captureAngle == angle else { return }
         switch result {
         case .success(let processed):
             image = processed
@@ -84,7 +91,7 @@ final class CaptureFlowModel {
     }
 
     var canSubmit: Bool {
-        image != nil && isSurveyComplete && aiAvailable && !isSubmitting
+        captureAngle != nil && image != nil && isSurveyComplete && aiAvailable && !isSubmitting
     }
 
     /// 설문 모든 항목에 답했는지 ("잘 모르겠어요" 포함). 추가 요청(자유 입력)만 선택.
@@ -93,14 +100,14 @@ final class CaptureFlowModel {
     }
 
     func enterSurvey(api: APIClient) async {
-        guard image != nil, path.last != .survey else { return }
-        do { guard try await modelReady(api: api) else { return } }
+        guard let angle = captureAngle, image != nil, path.last != .survey else { return }
+        do { guard try await modelReady(api: api, angle: angle) else { return } }
         catch { alert = AlertItem(message: error.userMessage); return }
-        if image != nil && path.last != .survey { path.append(.survey) }
+        if captureAngle == angle && image != nil && path.last != .survey { path.append(.survey) }
     }
 
-    private func modelReady(api: APIClient) async throws -> Bool {
-        guard sideView else { return true }
+    private func modelReady(api: APIClient, angle: Angle) async throws -> Bool {
+        guard angle.isSide else { return true }
         let status = try await api.send(SystemAPI.status())
         if status.canAnalyzeSide { return true }
         alert = AlertItem(message: "팀 서버의 측면 DINOv2가 아직 준비되지 않았어요. 정면으로 다시 촬영하거나 나중에 시도해 주세요.")
@@ -109,14 +116,14 @@ final class CaptureFlowModel {
 
     /// SCR-07: 제출 → 응답에 따라 이동 (화면 설계서 SCR-07 표)
     func submit(api: APIClient, router: AppRouter) async {
-        guard !isSubmitting, let image, isSurveyComplete else { return }
+        guard !isSubmitting, let angle = captureAngle, let image, isSurveyComplete else { return }
         isSubmitting = true
         defer { isSubmitting = false }
 
         do {
-            guard try await modelReady(api: api) else { return }
+            guard try await modelReady(api: api, angle: angle), captureAngle == angle else { return }
             var answers = survey
-            answers.captureView = sideView ? "side" : "front"
+            answers.captureView = angle.rawValue
             let submission = try await api.send(AnalysisAPI.submit(imageJPEG: image.jpegData, survey: answers))
             discardImage()
             router.showReport(analysisID: submission.analysisId)

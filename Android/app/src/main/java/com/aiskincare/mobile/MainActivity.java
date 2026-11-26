@@ -47,7 +47,14 @@ public final class MainActivity extends Activity {
     private String screen;
     private int version;
     private boolean rear, busy;
-    private boolean side;
+    private enum CaptureAngle {
+        FRONT("front"), SIDE("side");
+
+        final String apiValue;
+        CaptureAngle(String apiValue) { this.apiValue = apiValue; }
+    }
+
+    private CaptureAngle captureAngle;
     private boolean loadedDefaults;
     private long userId;
     private Photo photo;
@@ -705,7 +712,6 @@ public final class MainActivity extends Activity {
     private void startCapture() {
         clearCapture();
         rear = false;
-        side = false;
         if (getPreferences(MODE_PRIVATE).getBoolean("hideGuide", false)) capture();
         else guide();
     }
@@ -753,8 +759,15 @@ public final class MainActivity extends Activity {
         stepIndicator(false);
         hero("얼굴 사진을 준비해 주세요.", photo == null
                 ? "촬영 각도를 고른 뒤 사진 한 장을 준비해 주세요." : "이 사진으로 분석할게요.");
-        segment(page, "정면", "측면", side, value -> {
-            if (side != value) { side = value; photo = null; capture(); }
+        question("사진 각도", true);
+        Boolean sideSelection = captureAngle == null ? null : captureAngle == CaptureAngle.SIDE;
+        segment(page, "정면", "측면", sideSelection, value -> {
+            CaptureAngle selected = value ? CaptureAngle.SIDE : CaptureAngle.FRONT;
+            if (captureAngle != selected) {
+                captureAngle = selected;
+                photo = null;
+                capture();
+            }
         });
 
         FrameLayout preview = new FrameLayout(this) {
@@ -775,18 +788,25 @@ public final class MainActivity extends Activity {
         }
         page.addView(preview, -1, -2);
         segment(page, "셀프 촬영", "다른 사람이 촬영", rear, value -> rear = value);
-        label(page, side ? "한쪽 볼과 코 윤곽이 보이게 30~60도 돌려 주세요. 측면 분류는 시험 기능이며 실제 환자에서 정확도 검증이 필요해요." : "눈높이에서 양쪽 볼이 보이게 정면을 찍어 주세요.",
-                14, MUTED, 400, 1, 12);
+        String photoHint = captureAngle == null ? "정면은 양쪽 볼, 측면은 한쪽 볼과 코 윤곽이 보이는 사진이에요."
+                : captureAngle == CaptureAngle.SIDE ? "한쪽 볼과 코 윤곽이 보이게 30~60도 돌려 주세요. 측면 분류는 시험 기능이에요."
+                : "눈높이에서 양쪽 볼이 보이게 정면을 찍어 주세요.";
+        label(page, photoHint, 14, MUTED, 400, 1, 12);
         LinearLayout sources = style.row();
-        pair(sources, action(photo == null ? "촬영하기" : "다시 찍기", false, () -> camera(rear)),
-                action(photo == null ? "앨범에서 선택" : "다른 사진", false, this::pickPhoto), 8);
+        Button cameraButton = action(photo == null ? "촬영하기" : "다시 찍기", false, () -> camera(rear));
+        Button albumButton = action(photo == null ? "앨범에서 선택" : "다른 사진", false, this::pickPhoto);
+        cameraButton.setEnabled(captureAngle != null);
+        albumButton.setEnabled(captureAngle != null);
+        pair(sources, cameraButton, albumButton, 8);
         page.addView(sources);
-        style.primary(footer("다음", this::enterSurvey), photo != null);
+        style.primary(footer("다음", this::enterSurvey), captureAngle != null && photo != null);
     }
 
     private void enterSurvey() {
+        CaptureAngle angle = captureAngle;
+        if (angle == null || photo == null) return;
         task(() -> {
-            if (side) api.requireSideModel();
+            if (angle == CaptureAngle.SIDE) api.requireSideModel();
             if (loadedDefaults) return null;
             try {
                 JSONObject recent = api.history(1).getJSONArray("items").optJSONObject(0);
@@ -841,6 +861,7 @@ public final class MainActivity extends Activity {
     }
 
     private void pickPhoto() {
+        if (captureAngle == null || busy) return;
         if (android.os.Build.VERSION.SDK_INT >= 33) {
             try {
                 startActivityForResult(new Intent(MediaStore.ACTION_PICK_IMAGES).setType("image/*"), 20);
@@ -860,7 +881,7 @@ public final class MainActivity extends Activity {
         row.addView(right, new LinearLayout.LayoutParams(0, -2, 1));
     }
 
-    private void segment(LinearLayout owner, String first, String second, boolean right, Consumer<Boolean> onChange) {
+    private void segment(LinearLayout owner, String first, String second, Boolean right, Consumer<Boolean> onChange) {
         LinearLayout row = style.row();
         row.setPadding(dp(3), dp(3), dp(3), dp(3));
         row.setBackground(style.surface(FIELD, 12, false));
@@ -869,8 +890,8 @@ public final class MainActivity extends Activity {
         owner.addView(row, placement);
         Button left = style.button(first, 44), rightButton = style.button(second, 44);
         Consumer<Boolean> update = selected -> {
-            switchTab(left, !selected);
-            switchTab(rightButton, selected);
+            switchTab(left, Boolean.FALSE.equals(selected));
+            switchTab(rightButton, Boolean.TRUE.equals(selected));
         };
         pair(row, left, rightButton, 3);
         update.accept(right);
@@ -886,6 +907,7 @@ public final class MainActivity extends Activity {
 
     private void clearCapture() {
         photo = null;
+        captureAngle = null;
         loadedDefaults = false;
         draft = new JSONObject();
         draftText.clear();
@@ -896,11 +918,15 @@ public final class MainActivity extends Activity {
 
     private void reset() { clearCapture(); nickname = ""; email = ""; userId = 0; }
     private void camera(boolean rearLens) {
+        CaptureAngle angle = captureAngle;
+        if (angle == null || busy || !"capture".equals(screen)) return;
         rear = rearLens;
         if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.CAMERA}, 21); return;
         }
-        camera = new CaptureDialog(this, rear, side, bytes -> decode(ImageDecoder.createSource(ByteBuffer.wrap(bytes)), !rear), this::notice);
+        camera = new CaptureDialog(this, rearLens, angle == CaptureAngle.SIDE,
+                bytes -> { if (angle == captureAngle) decode(ImageDecoder.createSource(ByteBuffer.wrap(bytes)), !rearLens); },
+                this::notice);
         camera.show();
     }
     @Override public void onRequestPermissionsResult(int req, String[] p, int[] results) {
@@ -915,8 +941,10 @@ public final class MainActivity extends Activity {
             decode(ImageDecoder.createSource(getContentResolver(), data.getData()), false);
     }
     private void decode(ImageDecoder.Source source, boolean mirror) {
+        CaptureAngle angle = captureAngle;
+        if (angle == null || busy || !"capture".equals(screen)) return;
         photo=null; capture();
-        boolean sideView = side;
+        boolean sideView = angle == CaptureAngle.SIDE;
         task(() -> {
             android.graphics.Bitmap selected=Photo.read(source,3000);
             if (mirror) {
@@ -1154,11 +1182,11 @@ public final class MainActivity extends Activity {
     }
 
     private void submit(EditText avoid, EditText hours, EditText products, EditText note) {
-        if (photo == null || !draft.has("gender") || !draft.has("ageBand")) return;
+        if (captureAngle == null || photo == null || !draft.has("gender") || !draft.has("ageBand")) return;
         JSONObject answer;
         try {
             answer = new JSONObject(draft.toString());
-            put(answer, "captureView", side ? "side" : "front");
+            put(answer, "captureView", captureAngle.apiValue);
             JSONObject symptoms = answer.optJSONObject("symptomProfile");
             if (symptoms != null && symptoms.length() == 0) answer.remove("symptomProfile");
             answer.remove("avoidIngredients");

@@ -284,8 +284,20 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             onUi(()->click("피부 분석 시작"));
             if (hasText("촬영 화면으로")) onUi(()->click("촬영 화면으로"));
             await("얼굴 사진을 준비해 주세요.",5000);
-            if (side) onUi(()->click("측면"));
-            onUi(()->assertFalse(button("다음").isEnabled()));
+            if (side) captureScreen("capture-angle-choice");
+            String requestedAngle = side ? "측면" : "정면";
+            String otherAngle = side ? "정면" : "측면";
+            onUi(() -> {
+                assertFalse(button("정면").isSelected());
+                assertFalse(button("측면").isSelected());
+                assertFalse(button("촬영하기").isEnabled());
+                assertFalse(button("앨범에서 선택").isEnabled());
+                assertFalse(button("다음").isEnabled());
+                click(requestedAngle);
+                assertTrue(button(requestedAngle).isSelected());
+                assertTrue(button("촬영하기").isEnabled());
+                assertTrue(button("앨범에서 선택").isEnabled());
+            });
             Bitmap sample=Bitmap.createBitmap(840,800,Bitmap.Config.ARGB_8888);
             sample.eraseColor(0xffb9cecd);
             java.io.ByteArrayOutputStream flat=new java.io.ByteArrayOutputStream();
@@ -319,6 +331,17 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             getInstrumentation().waitForIdleSync();
             onUi(()->click("이 사진 사용"));
             await("이 사진으로 분석할게요.",10000);
+            onUi(() -> {
+                click(otherAngle);
+                assertFalse("Changing the angle must discard the previous photo", button("다음").isEnabled());
+                click(requestedAngle);
+                assertFalse("Switching back cannot restore the discarded photo", button("다음").isEnabled());
+                app.onActivityResult(20, Activity.RESULT_OK, new Intent().setData(Uri.fromFile(input)));
+            });
+            await("얼굴 위치 맞추기", 12000);
+            getInstrumentation().waitForIdleSync();
+            onUi(() -> click("이 사진 사용"));
+            await("이 사진으로 분석할게요.", 10000);
             captureScreen("capture");
             onUi(()->click("다음"));
             await("기본 정보를 알려 주세요.",3000);
@@ -387,6 +410,8 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
                 assertEquals("generated",detail.getString("recommendationStatus"));
                 assertEquals("source_linked", detail.getJSONObject("generation").getString("evidenceStatus"));
                 assertLiveRecommendationPaper(detail);
+            } else {
+                assertTrue(detail.getJSONObject("disease").getString("modelVersion").startsWith("densenet"));
             }
             assertTrue(detail.getJSONObject("disease").has("confidence"));
             assertEquals("30s",detail.getJSONObject("survey").getString("ageBand"));

@@ -10,6 +10,27 @@ final class MobileFlowUITests: XCTestCase {
     }
 
     @MainActor
+    func testCaptureRequiresExplicitAngleBeforeOpeningPhotoSources() {
+        let app = launch("capture")
+        let front = app.buttons["정면"].firstMatch
+        let side = app.buttons["측면"].firstMatch
+        let album = app.buttons["capture-album"].firstMatch
+        XCTAssertTrue(front.waitForExistence(timeout: 12))
+        XCTAssertFalse(front.isSelected)
+        XCTAssertFalse(side.isSelected)
+        for _ in 0..<3 where !album.exists { app.swipeUp() }
+        XCTAssertTrue(album.exists)
+        XCTAssertFalse(album.isEnabled)
+        if !side.isHittable { app.swipeDown() }
+        side.tap()
+        XCTAssertTrue(side.isSelected)
+        XCTAssertTrue(album.isEnabled)
+        front.tap()
+        XCTAssertTrue(front.isSelected)
+        XCTAssertFalse(side.isSelected)
+    }
+
+    @MainActor
     func testGeneratedReportShowsIngredientsRoutineAndCare() {
         let app = launch("recommendation")
         XCTAssertTrue(app.navigationBars["맞춤 추천"].waitForExistence(timeout: 15))

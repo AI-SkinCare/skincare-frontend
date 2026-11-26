@@ -5,6 +5,20 @@ import Testing
 private final class TestResources {}
 
 struct MobileParityTests {
+    @Test(arguments: ["front", "side"])
+    func selectedAngleIsSentInThePhotoUpload(_ angle: String) {
+        var answers = Survey()
+        answers.captureView = angle
+        let request = AnalysisAPI.submit(imageJPEG: Data([0xff, 0xd8, 0xff]), survey: answers)
+        guard case let .multipart(form) = request.body else {
+            Issue.record("Expected a multipart photo upload")
+            return
+        }
+        let payload = String(decoding: form.encoded(), as: UTF8.self)
+        #expect(payload.contains("name=\"survey\""))
+        #expect(payload.contains("\"captureView\":\"\(angle)\""))
+    }
+
     @Test func sideResultAndFreshSurvey() throws {
         #if SWIFT_PACKAGE
         let bundle = Bundle.module
