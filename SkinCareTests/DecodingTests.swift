@@ -9,7 +9,7 @@ struct DecodingTests {
             gender: .female, ageBand: .twenties,
             symptomProfile: SymptomProfile(itch: ItchFrequency.none, recurringRedness: false, areas: [.aroundNose])
         )
-        let request = AnalysisAPI.submit(imageJPEG: Data([0xff, 0xd8, 0xff]), survey: survey)
+        let request = AnalysisAPI.submit(image: Data([0xff, 0xd8, 0xff]), survey: survey)
         guard case .multipart(let form) = request.body else {
             Issue.record("분석 요청은 multipart여야 합니다.")
             return

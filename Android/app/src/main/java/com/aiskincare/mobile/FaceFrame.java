@@ -1,5 +1,6 @@
 package com.aiskincare.mobile;
 
+import android.graphics.Rect;
 import android.graphics.RectF;
 
 final class FaceFrame {
@@ -7,6 +8,21 @@ final class FaceFrame {
         float width=Math.min(w*.68f,h*.56f);
         float height=width*4/3;
         return new RectF((w-width)/2,h*.46f-height/2,(w+width)/2,h*.46f+height/2);
+    }
+
+    static Rect centeredSideCrop(int width, int height) {
+        int edge = Math.min(width, height);
+        int left = (width - edge) / 2, top = (height - edge) / 2;
+        return new Rect(left, top, left + edge, top + edge);
+    }
+
+    static RectF cropArea(RectF guide, boolean side) {
+        RectF area = new RectF(guide);
+        area.inset(-guide.width() * .3f, -guide.height() * .2f);
+        if (!side) return area;
+        float half = guide.width() * .72f;
+        return new RectF(area.centerX() - half, area.centerY() - half,
+                area.centerX() + half, area.centerY() + half);
     }
 
     static boolean aligned(RectF face, RectF guide, float yaw, float roll, boolean side) {

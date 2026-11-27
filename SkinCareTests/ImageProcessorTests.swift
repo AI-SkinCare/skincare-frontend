@@ -6,6 +6,15 @@ import Testing
 import UniformTypeIdentifiers
 
 struct ImageProcessorTests {
+    @Test func centeredSideCropUsesWholeSquareAndFloorForOddBorders() {
+        #expect(FaceGuideLayout.centeredSideCrop(in: CGSize(width: 1080, height: 1080))
+                == CGRect(x: 0, y: 0, width: 1080, height: 1080))
+        #expect(FaceGuideLayout.centeredSideCrop(in: CGSize(width: 1201, height: 800))
+                == CGRect(x: 200, y: 0, width: 800, height: 800))
+        #expect(FaceGuideLayout.centeredSideCrop(in: CGSize(width: 800, height: 1201))
+                == CGRect(x: 0, y: 200, width: 800, height: 800))
+    }
+
     private final class TestBundle {}
 
     @Test("같은 가상 정면·측면 사진으로 촬영 모드를 구분한다")
@@ -53,7 +62,7 @@ struct ImageProcessorTests {
     @Test("결과는 JPEG이고 GPS·EXIF 메타데이터가 없다 (NFR-PRI-01)")
     func stripsMetadata() throws {
         let result = try ImageProcessor.process(try makeJPEG(width: 1000, height: 1000, withGPS: true))
-        let source = try #require(CGImageSourceCreateWithData(result.jpegData as CFData, nil))
+        let source = try #require(CGImageSourceCreateWithData(result.data as CFData, nil))
         #expect(CGImageSourceGetType(source) as String? == UTType.jpeg.identifier)
         let properties = try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
         #expect(properties[kCGImagePropertyGPSDictionary] == nil)

@@ -210,7 +210,7 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             assertNull(problem.get());
             assertNotNull("No full-size capture from camera",jpeg.get());
             Photo photo=Photo.decode(android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(jpeg.get())));
-            assertTrue(photo.jpeg.length>0);
+            assertTrue(photo.data.length>0);
         } finally { onUi(()->dialog.get().dismiss()); }
     }
 
@@ -265,9 +265,28 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
             assertPaperClick("Giam 외 · 아토피 피부염의 목욕 후 보습 (2016)", "PMC4850335", "care-paper");
         } finally { account.login(email, password); account.deleteAccount(); }
     }
+    public void testCenteredSideCropKeepsSquareAndRoundsOddBordersDown() {
+        assertEquals(new android.graphics.Rect(0, 0, 1080, 1080), FaceFrame.centeredSideCrop(1080, 1080));
+        assertEquals(new android.graphics.Rect(200, 0, 1000, 800), FaceFrame.centeredSideCrop(1201, 800));
+        assertEquals(new android.graphics.Rect(0, 200, 800, 1000), FaceFrame.centeredSideCrop(800, 1201));
+    }
+
     public void testLocalSpringSideFlow() throws Exception { checkLocalSpringFlow(true); }
     private void checkLocalSpringFlow(boolean side) throws Exception {
         assertEquals("http://10.0.2.2:3000/api/v1", BuildConfig.SPRING_URL);
+        var target = getInstrumentation().getTargetContext();
+        String className = new android.content.ComponentName(target, MainActivity.class).getShortClassName();
+        var preferences = target.getSharedPreferences(className.startsWith(".") ? className.substring(1) : className, 0);
+        String previous = preferences.getString("spring", null);
+        assertTrue(preferences.edit().putString("spring", BuildConfig.SPRING_URL).commit());
+        try {
+            exerciseLocalSpringFlow(side);
+        } finally {
+            assertTrue(preferences.edit().putString("spring", previous).commit());
+        }
+    }
+
+    private void exerciseLocalSpringFlow(boolean side) throws Exception {
         MainActivity app=getActivity();
         String email="android-"+UUID.randomUUID()+"@example.invalid";
         String password=UUID.randomUUID()+"a1!";
@@ -276,6 +295,7 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
                 .put("imageProcessing",true).put("over14",true));
         File input=new File(app.getCacheDir(),"fictional-face-test.jpg");
         try {
+            await("로그인",15000);
             onUi(()->{
                 List<EditText> fields=views(EditText.class);
                 fields.get(0).setText(email); fields.get(1).setText(password); click("로그인");

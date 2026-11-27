@@ -163,12 +163,13 @@ final class SpringClient {
             throw new Failure(503, "팀 서버의 측면 DINOv2가 아직 준비되지 않았어요. 정면으로 다시 촬영하거나 나중에 시도해 주세요.");
         }
     }
-    JSONObject submit(byte[] photo, JSONObject survey) throws Exception {
+    JSONObject submit(Photo photo, JSONObject survey) throws Exception {
         if ("side".equals(survey.optString("captureView"))) requireSideModel();
         String boundary = "skin-" + UUID.randomUUID();
         return request("POST", "/analyses", true, "multipart/form-data; boundary=" + boundary, out -> {
-            write(out, "--" + boundary + "\r\nContent-Disposition: form-data; name=\"image\"; filename=\"face.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n");
-            out.write(photo);
+            write(out, "--" + boundary + "\r\nContent-Disposition: form-data; name=\"image\"; filename=\""
+                    + photo.format.filename + "\"\r\nContent-Type: " + photo.format.mimeType + "\r\n\r\n");
+            out.write(photo.data);
             write(out, "\r\n--" + boundary + "\r\nContent-Disposition: form-data; name=\"survey\"\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n");
             write(out, survey.toString() + "\r\n--" + boundary + "--\r\n");
         });

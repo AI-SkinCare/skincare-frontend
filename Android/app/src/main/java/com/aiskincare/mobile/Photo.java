@@ -1,14 +1,33 @@
 package com.aiskincare.mobile;
 
 import android.graphics.Bitmap;
+import android.graphics.ColorSpace;
 import android.graphics.ImageDecoder;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
 final class Photo {
+    enum Format {
+        JPEG("face.jpg", "image/jpeg", Bitmap.CompressFormat.JPEG),
+        PNG("face.png", "image/png", Bitmap.CompressFormat.PNG);
+
+        final String filename, mimeType;
+        final Bitmap.CompressFormat encoder;
+        Format(String filename, String mimeType, Bitmap.CompressFormat encoder) {
+            this.filename = filename;
+            this.mimeType = mimeType;
+            this.encoder = encoder;
+        }
+    }
+
     final Bitmap preview;
-    final byte[] jpeg;
-    private Photo(Bitmap preview, byte[] jpeg) { this.preview = preview; this.jpeg = jpeg; }
+    final byte[] data;
+    final Format format;
+    private Photo(Bitmap preview, byte[] data, Format format) {
+        this.preview = preview;
+        this.data = data;
+        this.format = format;
+    }
 
     // Run on the photo worker after EXIF orientation correction, before advancing to the survey.
     static com.google.mlkit.vision.face.Face face(Bitmap preview, boolean side) throws Exception {
@@ -48,15 +67,19 @@ final class Photo {
     }
 
     static Photo decode(ImageDecoder.Source source) throws IOException {
-        return encode(read(source, 1600));
+        return encode(read(source, 1600), Format.JPEG);
     }
     static Bitmap read(ImageDecoder.Source source, int maxSide) throws IOException {
+        return read(source, maxSide, false);
+    }
+    static Bitmap read(ImageDecoder.Source source, int maxSide, boolean useSRGB) throws IOException {
         Bitmap image = ImageDecoder.decodeBitmap(source, (decoder, info, ignored) -> {
             int w = info.getSize().getWidth(), h = info.getSize().getHeight();
             if (Math.min(w, h) < 720) throw new IllegalArgumentException("짧은 변이 720픽셀 이상인 사진을 골라 주세요.");
             float scale = Math.min(1f, (float)maxSide / Math.max(w, h));
             decoder.setTargetSize(Math.max(1, Math.round(w * scale)), Math.max(1, Math.round(h * scale)));
             decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE);
+            if (useSRGB) decoder.setTargetColorSpace(ColorSpace.get(ColorSpace.Named.SRGB));
         });
         Bitmap grid=Bitmap.createScaledBitmap(image,24,24,true);
         int[] pixels=new int[24*24];
@@ -72,12 +95,12 @@ final class Photo {
         if(uniform) throw new IllegalArgumentException("사진 전체가 단색에 가까워요. 얼굴과 주변이 보이게 다시 찍어 주세요.");
         return image;
     }
-    static Photo encode(Bitmap image) throws IOException {
+    static Photo encode(Bitmap image, Format format) throws IOException {
         float scale=Math.min(1f,1600f/Math.max(image.getWidth(),image.getHeight()));
         if (scale<1) image=Bitmap.createScaledBitmap(image,Math.round(image.getWidth()*scale),Math.round(image.getHeight()*scale),true);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        if (!image.compress(Bitmap.CompressFormat.JPEG, 90, out) || out.size() > 10 * 1024 * 1024)
+        if (!image.compress(format.encoder, 90, out) || out.size() > 10 * 1024 * 1024)
             throw new IOException("사진을 업로드 크기로 변환하지 못했어요.");
-        return new Photo(image, out.toByteArray());
+        return new Photo(image, out.toByteArray(), format);
     }
 }

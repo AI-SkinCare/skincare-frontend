@@ -9,7 +9,9 @@ struct MobileParityTests {
     func selectedAngleIsSentInThePhotoUpload(_ angle: String) {
         var answers = Survey()
         answers.captureView = angle
-        let request = AnalysisAPI.submit(imageJPEG: Data([0xff, 0xd8, 0xff]), survey: answers)
+        let isSide = angle == "side"
+        let bytes: [UInt8] = isSide ? [0x89, 0x50, 0x4e, 0x47] : [0xff, 0xd8, 0xff]
+        let request = AnalysisAPI.submit(image: Data(bytes), format: isSide ? .png : .jpeg, survey: answers)
         guard case let .multipart(form) = request.body else {
             Issue.record("Expected a multipart photo upload")
             return
@@ -17,6 +19,7 @@ struct MobileParityTests {
         let payload = String(decoding: form.encoded(), as: UTF8.self)
         #expect(payload.contains("name=\"survey\""))
         #expect(payload.contains("\"captureView\":\"\(angle)\""))
+        #expect(payload.contains(isSide ? "Content-Type: image/png" : "Content-Type: image/jpeg"))
     }
 
     @Test func sideResultAndFreshSurvey() throws {

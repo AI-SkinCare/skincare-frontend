@@ -58,7 +58,7 @@ final class CaptureFlowModel {
         surveyUnsure = Set((SurveyItem.stepOne + SurveyItem.stepTwo).filter { !survey.isAnswered($0, unsure: []) })
     }
 
-    func handlePickedImage(_ data: Data, angle: Angle) async {
+    func handlePickedImage(_ input: ConfirmedPhoto, angle: Angle) async {
         guard !isProcessingImage, captureAngle == angle else { return }
         image = nil
         previewImage = nil
@@ -68,14 +68,19 @@ final class CaptureFlowModel {
 
         let result = await Task.detached(priority: .userInitiated) {
             Result { () throws(ImageValidationError) -> ProcessedImage in
-                try ImageProcessor.prepareForAnalysis(data, side: angle.isSide)
+                switch input {
+                case .encoded(let data):
+                    return try ImageProcessor.prepareForAnalysis(data, side: angle.isSide)
+                case let .sideCrop(image, rect):
+                    return try ImageProcessor.prepareSideCrop(image.cgImage, rect: rect)
+                }
             }
         }.value
         guard captureAngle == angle else { return }
         switch result {
         case .success(let processed):
             image = processed
-            previewImage = UIImage(data: processed.jpegData)
+            previewImage = UIImage(data: processed.data)
             retakeReason = nil
         case .failure(let error):
             image = nil
@@ -124,7 +129,7 @@ final class CaptureFlowModel {
             guard try await modelReady(api: api, angle: angle), captureAngle == angle else { return }
             var answers = survey
             answers.captureView = angle.rawValue
-            let submission = try await api.send(AnalysisAPI.submit(imageJPEG: image.jpegData, survey: answers))
+            let submission = try await api.send(AnalysisAPI.submit(image: image.data, format: image.format, survey: answers))
             discardImage()
             router.showReport(analysisID: submission.analysisId)
         } catch let error as APIError {

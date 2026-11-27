@@ -946,7 +946,7 @@ public final class MainActivity extends Activity {
         photo=null; capture();
         boolean sideView = angle == CaptureAngle.SIDE;
         task(() -> {
-            android.graphics.Bitmap selected=Photo.read(source,3000);
+            android.graphics.Bitmap selected=Photo.read(source,3000,sideView);
             if (mirror) {
                 android.graphics.Matrix transform=new android.graphics.Matrix();
                 transform.setScale(-1,1);
@@ -956,14 +956,16 @@ public final class MainActivity extends Activity {
         }, pair -> {
             page("align", null);
             toolbar("", this::capture, "사진으로 돌아가기", this::closeCapture);
-            hero("얼굴 위치 맞추기", "사진을 이동하거나 확대해 얼굴을 타원 안에 맞춰 주세요.");
+            hero("얼굴 위치 맞추기", sideView ? "사각형 안의 사진으로 분석해요. 필요하면 사진을 이동하거나 확대해 주세요."
+                    : "사진을 이동하거나 확대해 얼굴을 타원 안에 맞춰 주세요.");
             Button confirm=footer("이 사진 사용", () -> {});
             style.primary(confirm,false);
             FaceCropView framing=new FaceCropView(this,pair.first,pair.second,sideView,ok->style.primary(confirm,ok));
             page.addView(framing,-1,dp(420));
             confirm.setOnClickListener(v -> {
                 android.graphics.Bitmap cropped=framing.crop();
-                task(()->Photo.encode(cropped), selected->{ photo=selected; capture(); });
+                task(()->Photo.encode(cropped, sideView ? Photo.Format.PNG : Photo.Format.JPEG),
+                        selected->{ photo=selected; capture(); });
             });
         });
     }
@@ -1208,8 +1210,8 @@ public final class MainActivity extends Activity {
             notice(invalid.getMessage());
             return;
         }
-        byte[] jpeg = photo.jpeg;
-        task(() -> api.submit(jpeg, answer), result -> {
+        Photo upload = photo;
+        task(() -> api.submit(upload, answer), result -> {
             clearCapture();
             reportBack = "home";
             openReport(result);
