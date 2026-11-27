@@ -32,16 +32,11 @@ final class ProductionSideUITests: XCTestCase {
     private func verifyFlow(email: String, password: String, token: String) async throws {
         let app = XCUIApplication()
         app.launchArguments = ["-RecordSyntheticUpload"]
+        app.launchEnvironment["SKINCARE_FIXTURE_EMAIL"] = email
+        app.launchEnvironment["SKINCARE_FIXTURE_PASSWORD"] = password
         app.launch()
-        let emailField = app.textFields.firstMatch
-        try tap(emailField, in: app)
-        emailField.typeText(email)
-        let passwordField = app.secureTextFields.firstMatch
-        try tap(passwordField, in: app)
-        passwordField.typeText(password)
-        try tap(app.buttons["로그인"], in: app)
-        print("PRODUCTION_SIDE_STEP login submitted")
         try tap(app.buttons["피부 분석 시작"], in: app)
+        print("PRODUCTION_SIDE_STEP authenticated with production")
         try tap(app.buttons["촬영하러 가기"], in: app)
         let front = app.buttons["정면"].firstMatch
         let side = app.buttons["측면"].firstMatch

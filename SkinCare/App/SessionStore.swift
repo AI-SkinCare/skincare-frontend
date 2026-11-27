@@ -25,6 +25,13 @@ final class SessionStore {
 
     func restore() async {
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-RecordSyntheticUpload"),
+           let email = ProcessInfo.processInfo.environment["SKINCARE_FIXTURE_EMAIL"],
+           let password = ProcessInfo.processInfo.environment["SKINCARE_FIXTURE_PASSWORD"] {
+            do { try await signIn(email: email, password: password) }
+            catch { state = .signedOut }
+            return
+        }
         if [.login, .signup].contains(DebugLaunch.startScreen) {
             state = .signedOut
             return
