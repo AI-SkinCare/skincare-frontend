@@ -52,7 +52,7 @@ struct DecodingTests {
         #expect(!analysis.status.isInProgress)
         #expect(analysis.disease.label == "아토피")
         #expect(analysis.disease.labelEn == .atopic)
-        #expect(analysis.disease.confidencePercent == "90%")
+        #expect(analysis.disease.confidencePoints == "90.0점")
         #expect(analysis.disease.orderedProbabilities.map(\.label) == ["건선", "아토피", "여드름", "정상", "주사", "지루"])
         #expect(analysis.recommendationStatus == .generated)
         #expect(analysis.recommendation?.skinType?.code == .dry)
@@ -149,11 +149,14 @@ struct DecodingTests {
         #expect(!json.contains("skinType"))
     }
 
-    @Test("모델 분류 점수 백분율")
-    func percent() {
-        #expect(Disease.percent(0.554) == "55%")
-        #expect(Disease.percent(1.2) == "100%")
-        #expect(Disease.percent(-0.1) == "0%")
+    @Test("100점 만점 표시와 유효하지 않은 모델 점수")
+    func points() {
+        #expect(Disease.points(0.554) == "55.4점")
+        #expect(Disease.points(1) == "100.0점")
+        #expect(Disease.points(0) == "0.0점")
+        #expect(Disease.points(1.2) == nil)
+        #expect(Disease.points(-0.1) == nil)
+        #expect(Disease.points(.nan) == nil)
     }
 }
 

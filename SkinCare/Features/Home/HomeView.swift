@@ -166,7 +166,9 @@ private struct RecentResultCard: View {
                     .foregroundStyle(.textMuted)
                 HStack(spacing: Spacing.xs) {
                     Text(item.disease.label).appText(.link).foregroundStyle(.ink)
-                    Text("모델 분류 점수 \(item.disease.confidencePercent)").appText(.caption).foregroundStyle(.textMuted)
+                    if let score = item.disease.confidencePoints {
+                        Text("모델 분류 점수 \(score) / 100점").appText(.caption).foregroundStyle(.textMuted)
+                    }
                 }
                 AnalysisStatusLine(status: item.status, recommendationStatus: item.recommendationStatus, concerns: item.concerns)
             }

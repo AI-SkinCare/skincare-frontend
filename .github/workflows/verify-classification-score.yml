@@ -1,0 +1,26 @@
+name: Verify 100-point classification explanation
+
+on:
+  push:
+    branches: [verify/classification-score-20261128]
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run classification contracts and iPhone UI
+        shell: bash
+        run: |
+          device=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; versions=json.load(sys.stdin)["devices"]; print(next(d["udid"] for k in sorted(versions, reverse=True) if "iOS" in k for d in versions[k] if d["name"].startswith("iPhone")))')
+          xcodebuild test \
+            -project SkinCare.xcodeproj -scheme SkinCare -destination "id=$device" \
+            CODE_SIGNING_ALLOWED=NO \
+            -only-testing:SkinCareTests/ClassificationExplanationTests \
+            -only-testing:SkinCareTests/MobileParityTests \
+            -only-testing:SkinCareTests/DecodingTests \
+            -only-testing:SkinCareUITests/MobileFlowUITests/testShowsClassificationScoreAndExplanation
