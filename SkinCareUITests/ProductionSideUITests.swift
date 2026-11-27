@@ -129,20 +129,13 @@ final class ProductionSideUITests: XCTestCase {
 
     @MainActor
     private func selectPhoto(in app: XCUIApplication) throws {
-        let photo = app.descendants(matching: .any).matching(
-            NSPredicate(format: "label BEGINSWITH[c] %@ OR label BEGINSWITH[c] %@", "Photo,", "사진,")
-        ).firstMatch
-        if photo.waitForExistence(timeout: 8), photo.isHittable {
-            photo.tap()
-            return
+        // simctl adds the only new photo; the picker lists that newest item first.
+        let picker = app.scrollViews["photosView_content_scroll_view"].firstMatch
+        let photo = picker.images.matching(identifier: "PXGGridLayout-Info").firstMatch
+        guard photo.waitForExistence(timeout: 15) else {
+            throw ValidationError.controlNotVisible("Most recent photo in the system picker", app.debugDescription)
         }
-        let cell = app.cells.firstMatch
-        if cell.waitForExistence(timeout: 8), cell.isHittable {
-            cell.tap()
-            return
-        }
-        let image = app.scrollViews.images.firstMatch
-        try tap(image, in: app, allowScroll: false)
+        photo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
     @MainActor
@@ -171,7 +164,7 @@ final class ProductionSideUITests: XCTestCase {
 
     @MainActor
     private func reveal(_ element: XCUIElement, in app: XCUIApplication, timeout: TimeInterval = 15, allowScroll: Bool = true) throws {
-        if !element.waitForExistence(timeout: min(timeout, 15)), timeout > 15 {
+        if !element.exists, !element.waitForExistence(timeout: min(timeout, 15)), timeout > 15 {
             _ = element.waitForExistence(timeout: timeout - 15)
         }
         if allowScroll {
