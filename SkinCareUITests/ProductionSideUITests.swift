@@ -31,6 +31,7 @@ final class ProductionSideUITests: XCTestCase {
     @MainActor
     private func verifyFlow(email: String, password: String, token: String) async throws {
         let app = XCUIApplication()
+        app.launchArguments = ["-RecordSyntheticUpload"]
         app.launch()
         let emailField = app.textFields.firstMatch
         try tap(emailField, in: app)

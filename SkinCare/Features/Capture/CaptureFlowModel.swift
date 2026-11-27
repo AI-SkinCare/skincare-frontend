@@ -124,6 +124,12 @@ final class CaptureFlowModel {
             guard try await modelReady(api: api, angle: angle), captureAngle == angle else { return }
             var answers = survey
             answers.captureView = angle.rawValue
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-RecordSyntheticUpload") {
+                let output = FileManager.default.temporaryDirectory.appendingPathComponent("synthetic-side-upload.jpg")
+                try? image.jpegData.write(to: output)
+            }
+            #endif
             let submission = try await api.send(AnalysisAPI.submit(imageJPEG: image.jpegData, survey: answers))
             discardImage()
             router.showReport(analysisID: submission.analysisId)

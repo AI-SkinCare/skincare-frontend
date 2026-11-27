@@ -73,6 +73,8 @@ jobs:
           assert all((destination / output).is_file() for output in mapping.values()), "Missing production test evidence"
           print((destination / "ios-proof.json").read_text())
           PY
+          container=$(xcrun simctl get_app_container "$SIM_ID" com.aiskincare.skincare data)
+          cp "$container/tmp/synthetic-side-upload.jpg" "$RUNNER_TEMP/production-side/"
       - uses: actions/upload-artifact@v4
         with:
           name: production-ios-side-result
