@@ -54,11 +54,18 @@ enum UsersAPI {
     }
 }
 
+enum PhotoUploadFormat: Sendable, Equatable {
+    case jpeg, png
+
+    var filename: String { self == .jpeg ? "face.jpg" : "face.png" }
+    var mimeType: String { self == .jpeg ? "image/jpeg" : "image/png" }
+}
+
 enum AnalysisAPI {
     /// 사진 + 설문 제출 → 이미지 분류 → 추천 대기열 등록. 202 + AnalysisView
-    static func submit(imageJPEG: Data, survey: Survey) -> APIRequest<AnalysisView> {
+    static func submit(image: Data, format: PhotoUploadFormat = .jpeg, survey: Survey) -> APIRequest<AnalysisView> {
         var form = MultipartFormData()
-        form.addFile(name: "image", filename: "face.jpg", mimeType: "image/jpeg", data: imageJPEG)
+        form.addFile(name: "image", filename: format.filename, mimeType: format.mimeType, data: image)
         let surveyJSON = (try? JSONEncoder().encode(survey.sanitized())).flatMap { String(data: $0, encoding: .utf8) }
         form.addField(name: "survey", value: surveyJSON ?? "{}")
         return APIRequest(method: .post, path: "/analyses", body: .multipart(form))

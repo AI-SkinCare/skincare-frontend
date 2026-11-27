@@ -181,8 +181,10 @@ struct CameraView: View {
             withAnimation(.easeOut(duration: 0.1)) { flash = true }
             let size = viewSize
             let area = FaceGuideLayout.cropArea(for: FaceGuideLayout.guideRect(in: size))
-            // 미리보기에서 보이던 그대로(좌우 반전 포함) 가이드 주변만 자른다. 실패하면 원본을 넘긴다.
+            let side = sideView
+            // 측면은 다음 화면에서 업로드 영역을 확인한다. 정면은 미리보기 가이드 주변을 바로 자른다.
             let data = await Task.detached(priority: .userInitiated) {
+                if side { return raw }
                 guard let image = OrientedImage.upright(from: raw),
                       let rect = FaceGuideLayout.pixelRect(of: area, viewSize: size, imageSize: image.pixelSize)
                 else { return raw }

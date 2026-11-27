@@ -9,9 +9,18 @@ enum FaceGuideLayout {
         return CGRect(x: (size.width - width) / 2, y: size.height * 0.46 - height / 2, width: width, height: height)
     }
 
-    /// 업로드할 사진으로 자르는 영역: 가이드 + 좌우 30%·위아래 20% 여유 (카메라·앨범 공통)
-    static func cropArea(for guide: CGRect) -> CGRect {
-        guide.insetBy(dx: -guide.width * 0.3, dy: -guide.height * 0.2)
+    /// 정면은 타원 가이드 주변에 여유를 두고, 측면은 전송 영역을 정사각형으로 표시한다.
+    static func cropArea(for guide: CGRect, side: Bool = false) -> CGRect {
+        if side {
+            let half = guide.width * 0.72
+            return CGRect(x: guide.midX - half, y: guide.midY - half, width: half * 2, height: half * 2)
+        }
+        return guide.insetBy(dx: -guide.width * 0.3, dy: -guide.height * 0.2)
+    }
+
+    static func centeredSideCrop(in size: CGSize) -> CGRect {
+        let edge = min(size.width, size.height)
+        return CGRect(x: floor((size.width - edge) / 2), y: floor((size.height - edge) / 2), width: edge, height: edge)
     }
 
     /// 화면 채움(aspect fill)으로 보이던 이미지에서 화면 영역 `area`에 해당하는 픽셀 영역. 이미지 밖은 잘라낸다.
@@ -31,20 +40,21 @@ enum FaceGuideLayout {
 struct FaceGuideOverlay: View {
     let guide: CGRect
     var isAligned = false
+    var square = false
 
     var body: some View {
         ZStack {
             Path { path in
                 path.addRect(CGRect(x: -1000, y: -1000, width: 4000, height: 4000))
-                path.addEllipse(in: guide)
+                if square { path.addRect(guide) } else { path.addEllipse(in: guide) }
             }
             .fill(Color.black.opacity(0.55), style: FillStyle(eoFill: true))
 
-            Ellipse()
+            Path { path in
+                if square { path.addRect(guide) } else { path.addEllipse(in: guide) }
+            }
                 .stroke(.white.opacity(isAligned ? 1 : 0.85),
                         style: StrokeStyle(lineWidth: isAligned ? 4 : 2.5, dash: isAligned ? [] : [10, 8]))
-                .frame(width: guide.width, height: guide.height)
-                .position(x: guide.midX, y: guide.midY)
                 .animation(.easeOut(duration: 0.2), value: isAligned)
 
             if isAligned {

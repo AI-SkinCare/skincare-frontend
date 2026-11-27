@@ -19,6 +19,7 @@ struct CaptureView: View {
     }
 
     @State private var showsCamera = false
+    @State private var pendingSideCapture: AlbumPick?
     #if DEBUG
     @State private var didOpenDebugSource = false
     #endif
@@ -129,10 +130,17 @@ struct CaptureView: View {
                 Task { await model.handlePickedImage(cropped, angle: pick.angle) }
             }
         }
-        .fullScreenCover(isPresented: $showsCamera) {
+        .fullScreenCover(isPresented: $showsCamera, onDismiss: {
+            if let pick = pendingSideCapture, pick.angle == model.captureAngle { albumPick = pick }
+            pendingSideCapture = nil
+        }) {
             if let angle = model.captureAngle {
                 CameraView(useRearCamera: useRearCamera, sideView: angle.isSide) { data in
-                    Task { await model.handlePickedImage(data, angle: angle) }
+                    if angle.isSide {
+                        pendingSideCapture = AlbumPick(data: data, angle: angle)
+                    } else {
+                        Task { await model.handlePickedImage(.encoded(data), angle: angle) }
+                    }
                 }
             }
         }
