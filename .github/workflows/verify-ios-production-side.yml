@@ -1,0 +1,81 @@
+name: Production iOS side photo verification
+
+on:
+  push:
+    branches: [verify/ios-production-side-20261127]
+
+permissions:
+  contents: read
+
+jobs:
+  simulator:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare production iPhone simulator
+        shell: bash
+        run: |
+          xcodebuild -version
+          curl -fsS 'https://skincare.doi2.my/api/v1/system/status' | python3 -c 'import json,sys; status=json.load(sys.stdin)["data"]; assert status["aiAvailable"] and status["sideCaptureAvailable"]; print("Production side analysis ready")'
+          printf '%s\n' 'API_BASE_URL = https:/$()/skincare.doi2.my/api/v1' > Config/Local.xcconfig
+          xcrun simctl list devices available -j | python3 -c 'import json,sys; versions=json.load(sys.stdin)["devices"]; device=next(device for runtime in sorted(versions, reverse=True) if "iOS" in runtime for device in versions[runtime] if device["name"].startswith("iPhone")); print("SIM_ID="+device["udid"]); print("SIM_NAME="+device["name"])' >> "$GITHUB_ENV"
+          shasum -a 256 Android/app/src/androidTest/assets/fictional-side-face.jpg
+      - name: Run Android photo through production iOS flow
+        shell: bash
+        run: |
+          echo "$SIM_NAME"
+          xcrun simctl bootstatus "$SIM_ID" -b
+          xcrun simctl addmedia "$SIM_ID" Android/app/src/androidTest/assets/fictional-side-face.jpg
+          status=0
+          xcodebuild test \
+            -project SkinCare.xcodeproj -scheme SkinCare \
+            -destination "id=$SIM_ID" CODE_SIGNING_ALLOWED=NO \
+            -parallel-testing-enabled NO \
+            -only-testing:SkinCareUITests/ProductionSideUITests/testProductionSidePhoto \
+            -resultBundlePath "$RUNNER_TEMP/ProductionSide.xcresult" \
+            > "$RUNNER_TEMP/production-side-xcode.log" 2>&1 || status=$?
+          grep -E 'PRODUCTION_SIDE_|Test Case .*ProductionSideUITests|Executed [0-9]+ tests|[.]swift:[0-9]+:[0-9]+: error:|error:.*(ProductionSideUI|Testing)|[ *]TEST (SUCCEEDED|FAILED)' \
+            "$RUNNER_TEMP/production-side-xcode.log" || true
+          if [ "$status" -ne 0 ]; then
+            grep -E "Find the|Waiting .* for|does not exist|Failed to|timed out" "$RUNNER_TEMP/production-side-xcode.log" |
+              grep -v -Ei 'text(field| field)|keyboard|password|login|@example' | tail -50 || true
+          fi
+          exit "$status"
+      - name: Export verified screens and result only
+        if: success()
+        shell: bash
+        run: |
+          xcrun xcresulttool export attachments --path "$RUNNER_TEMP/ProductionSide.xcresult" --output-path "$RUNNER_TEMP/side-attachments"
+          python3 - <<'PY'
+          import json
+          import os
+          import shutil
+          from pathlib import Path
+
+          directory = Path(os.environ["RUNNER_TEMP"])
+          source = directory / "side-attachments"
+          destination = directory / "production-side"
+          destination.mkdir()
+          manifest = json.loads((source / "manifest.json").read_text())
+          mapping = {
+              "ProductionClassification": "ios-classification.png",
+              "ProductionIngredients": "ios-ingredients.png",
+              "ProductionRoutine": "ios-routine.png",
+              "ProductionProof": "ios-proof.json",
+          }
+          for test in manifest:
+              for attachment in test.get("attachments", []):
+                  name = attachment.get("suggestedHumanReadableName", "")
+                  for marker, output in mapping.items():
+                      if marker in name:
+                          shutil.copyfile(source / attachment["exportedFileName"], destination / output)
+          assert all((destination / output).is_file() for output in mapping.values()), "Missing production test evidence"
+          print((destination / "ios-proof.json").read_text())
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: production-ios-side-result
+          path: ${{ runner.temp }}/production-side
+          if-no-files-found: error
+          retention-days: 7
