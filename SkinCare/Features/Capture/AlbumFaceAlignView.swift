@@ -3,12 +3,18 @@ import SwiftUI
 import UniformTypeIdentifiers
 import Vision
 
+enum ConfirmedPhoto: Sendable {
+    case encoded(Data)
+    case sideCrop(OrientedImage, CGRect)
+}
+
 /// 앨범 사진의 얼굴을 타원 가이드 안에 맞추는 화면 (패치 §2 SCR-05).
 /// 사진을 드래그·확대해서 맞추고, 얼굴이 가이드 안에 들어왔을 때만 사용할 수 있다. 확인하면 가이드 주변만 잘라서 넘긴다.
 /// 사진은 메모리에서만 다룬다 (NFR-PRI-01).
 struct AlbumFaceAlignView: View {
     let imageData: Data
-    let onConfirm: (Data) -> Void
+    var sideView = false
+    let onConfirm: (ConfirmedPhoto) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var loaded: AlbumImage?
@@ -19,6 +25,7 @@ struct AlbumFaceAlignView: View {
     @State private var gestureOffset: CGSize = .zero
     /// 사용자가 직접 옮기거나 확대했는지. 그 전에는 화면 크기가 바뀔 때마다(전체 화면 전환 애니메이션 등) 다시 맞춘다.
     @State private var userAdjusted = false
+    @State private var defaultSideCrop: CGRect?
     @State private var isExporting = false
     /// 전체 화면(안전 영역 무시) 크기 — 사진·가이드 좌표의 기준
     @State private var canvasSize: CGSize = .zero
@@ -38,11 +45,14 @@ struct AlbumFaceAlignView: View {
                             .frame(width: loaded.pixelSize.width * currentScale, height: loaded.pixelSize.height * currentScale)
                             .position(x: proxy.size.width / 2 + currentOffset.width, y: proxy.size.height / 2 + currentOffset.height)
                             .gesture(dragAndZoom)
-                            .accessibilityLabel("선택한 사진. 드래그하고 두 손가락으로 확대해서 얼굴을 원 안에 맞춰 주세요")
+                            .accessibilityLabel(sideView ? "선택한 사진. 사각형 안의 사진으로 분석해요."
+                                                : "선택한 사진. 드래그하고 두 손가락으로 확대해서 얼굴을 원 안에 맞춰 주세요")
                     } else if !loadFailed {
                         ProgressView().tint(.white)
                     }
-                    FaceGuideOverlay(guide: FaceGuideLayout.guideRect(in: proxy.size), isAligned: evaluation.canUse)
+                    let visibleGuide = FaceGuideLayout.guideRect(in: proxy.size)
+                    FaceGuideOverlay(guide: sideView ? FaceGuideLayout.cropArea(for: visibleGuide, side: true) : visibleGuide,
+                                     isAligned: evaluation.canUse, square: sideView)
                 }
                 .onAppear { canvasSize = proxy.size }
                 .onChange(of: proxy.size) { _, size in
@@ -156,6 +166,7 @@ struct AlbumFaceAlignView: View {
 
     private func evaluate(size: CGSize, guide: CGRect) -> Evaluation {
         guard let loaded, !loaded.faces.isEmpty else { return Evaluation(result: .noFace, cropTooSmall: false) }
+        if defaultSideCrop != nil && !userAdjusted { return Evaluation(result: .aligned, cropTooSmall: false) }
         let frame = imageFrame(size: size, pixelSize: loaded.pixelSize)
         let faces = loaded.faces.map { face in
             FaceAlignment.Face(
@@ -166,13 +177,19 @@ struct AlbumFaceAlignView: View {
         }
         let crop = cropRect(size: size, guide: guide, loaded: loaded)
         let tooSmall = crop.map { min($0.width, $0.height) < CGFloat(ImageProcessor.minShortSide) } ?? true
-        return Evaluation(result: FaceAlignment.evaluate(faces: faces, guide: guide), cropTooSmall: tooSmall)
+        let framing = sideView ? FaceGuideLayout.cropArea(for: guide, side: true) : guide
+        let result = FaceAlignment.evaluate(faces: faces, guide: framing, side: sideView)
+        if sideView, result.isAligned, let crop, !crop.contains(loaded.faces[0].rect) {
+            return Evaluation(result: .offCenter, cropTooSmall: tooSmall)
+        }
+        return Evaluation(result: result, cropTooSmall: tooSmall)
     }
 
     /// 잘라낼 영역 (사진 픽셀 좌표): 가이드 주변으로 여유를 둔다.
     private func cropRect(size: CGSize, guide: CGRect, loaded: AlbumImage) -> CGRect? {
+        if let defaultSideCrop, !userAdjusted { return defaultSideCrop }
         let frame = imageFrame(size: size, pixelSize: loaded.pixelSize)
-        let area = FaceGuideLayout.cropArea(for: guide)
+        let area = FaceGuideLayout.cropArea(for: guide, side: sideView)
         let inImage = CGRect(x: (area.minX - frame.minX) / currentScale, y: (area.minY - frame.minY) / currentScale,
                              width: area.width / currentScale, height: area.height / currentScale)
         let clipped = inImage.intersection(CGRect(origin: .zero, size: loaded.pixelSize)).integral
@@ -223,6 +240,7 @@ struct AlbumFaceAlignView: View {
     /// 얼굴(첫 번째)을 가이드 가운데에, 적당한 크기로 놓는다. 얼굴이 없으면 화면을 채운다.
     private func autoFit(size: CGSize, guide: CGRect) {
         guard var loaded, size.width > 0 else { return }
+        defaultSideCrop = nil
         let fill = max(size.width / loaded.pixelSize.width, size.height / loaded.pixelSize.height)
         guard let face = loaded.faces.first?.rect else {
             scale = fill
@@ -231,13 +249,20 @@ struct AlbumFaceAlignView: View {
             self.loaded = loaded
             return
         }
-        // 얼굴 크기 비율을 판정 범위의 가운데쯤(0.6)으로
+        let crop = FaceGuideLayout.centeredSideCrop(in: loaded.pixelSize)
+        let faces = loaded.faces.map { FaceAlignment.Face(rect: $0.rect, yaw: $0.yaw, roll: $0.roll) }
+        if sideView, crop.width >= CGFloat(ImageProcessor.minShortSide), crop.contains(face),
+           FaceAlignment.evaluate(faces: faces, guide: crop, side: true).isAligned {
+            defaultSideCrop = crop
+        }
+        let anchor = defaultSideCrop ?? face
         let target = 0.6 * (guide.width * guide.height).squareRoot()
-        let fitted = target / (face.width * face.height).squareRoot()
+        let fitted = defaultSideCrop.map { FaceGuideLayout.cropArea(for: guide, side: true).width / $0.width }
+            ?? target / (face.width * face.height).squareRoot()
         scale = fitted
         offset = CGSize(
-            width: guide.midX - size.width / 2 - (face.midX - loaded.pixelSize.width / 2) * fitted,
-            height: guide.midY - size.height / 2 - (face.midY - loaded.pixelSize.height / 2) * fitted
+            width: guide.midX - size.width / 2 - (anchor.midX - loaded.pixelSize.width / 2) * fitted,
+            height: guide.midY - size.height / 2 - (anchor.midY - loaded.pixelSize.height / 2) * fitted
         )
         loaded.setScaleRange(base: min(fitted, fill))
         self.loaded = loaded
@@ -249,9 +274,14 @@ struct AlbumFaceAlignView: View {
         isExporting = true
         defer { isExporting = false }
         let image = loaded.image
+        if sideView {
+            onConfirm(.sideCrop(image, crop))
+            dismiss()
+            return
+        }
         let data = await Task.detached(priority: .userInitiated) { image.jpegData(cropping: crop) }.value
         guard let data else { return }
-        onConfirm(data)
+        onConfirm(.encoded(data))
         dismiss()
     }
 }

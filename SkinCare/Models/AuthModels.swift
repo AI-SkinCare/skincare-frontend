@@ -43,6 +43,8 @@ struct Me: Decodable, Sendable {
 
 struct SystemStatus: Decodable, Sendable {
     let aiAvailable: Bool
+    var sideCaptureAvailable: Bool?
+    var canAnalyzeSide: Bool { aiAvailable && sideCaptureAvailable == true }
     let queueLength: Int
     let estimatedWaitSec: Int?
     /// 첫 헬스체크 전이면 null

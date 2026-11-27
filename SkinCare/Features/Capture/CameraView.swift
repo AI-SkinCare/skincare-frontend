@@ -5,6 +5,8 @@ import SwiftUI
 /// 얼굴이 가이드 안에 일정 시간 들어와 있을 때만 셔터가 켜진다 (FaceAlignment).
 /// 촬영 결과는 메모리(Data)로만 넘기고 사진 앱이나 파일에 저장하지 않는다 (NFR-PRI-01).
 struct CameraView: View {
+    var useRearCamera = false
+    var sideView = false
     let onCapture: (Data) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -81,7 +83,7 @@ struct CameraView: View {
             .accessibilityLabel("닫기")
             Spacer()
             HStack(spacing: Spacing.xs) {
-                ForEach(["정면", "자연광", "맨얼굴"], id: \.self) { hint in
+                ForEach([sideView ? "측면" : "정면", "자연광", "맨얼굴"], id: \.self) { hint in
                     Text(hint)
                         .appText(.label)
                         .foregroundStyle(.white)
@@ -158,11 +160,11 @@ struct CameraView: View {
                 camera.onAlignment = { result in
                     Task { @MainActor in tracker.update(result) }
                 }
-                try await camera.configure()
+                try await camera.configure(position: useRearCamera ? .back : .front, side: sideView)
                 camera.start()
                 state = .ready
-            } catch CameraController.CameraError.noFrontCamera {
-                state = .unavailable
+            } catch CameraController.CameraError.noCamera {
+                state = .failed("선택한 카메라를 사용할 수 없어요. 다른 촬영 방법이나 앨범을 선택해 주세요.")
             } catch {
                 state = .failed("카메라를 켜지 못했어요. 잠시 후 다시 시도해 주세요.")
             }
@@ -179,8 +181,10 @@ struct CameraView: View {
             withAnimation(.easeOut(duration: 0.1)) { flash = true }
             let size = viewSize
             let area = FaceGuideLayout.cropArea(for: FaceGuideLayout.guideRect(in: size))
-            // 미리보기에서 보이던 그대로(좌우 반전 포함) 가이드 주변만 자른다. 실패하면 원본을 넘긴다.
+            let side = sideView
+            // 측면은 다음 화면에서 업로드 영역을 확인한다. 정면은 미리보기 가이드 주변을 바로 자른다.
             let data = await Task.detached(priority: .userInitiated) {
+                if side { return raw }
                 guard let image = OrientedImage.upright(from: raw),
                       let rect = FaceGuideLayout.pixelRect(of: area, viewSize: size, imageSize: image.pixelSize)
                 else { return raw }
@@ -286,7 +290,7 @@ private struct CameraPreview: UIViewRepresentable {
 /// AVCaptureSession 설정·촬영·얼굴 감지. 세션 작업은 전용 큐에서 한다 (startRunning은 블로킹).
 final class CameraController: NSObject, @unchecked Sendable {
     enum CameraError: Error {
-        case noFrontCamera, configurationFailed, captureFailed
+        case noCamera, configurationFailed, captureFailed
     }
 
     let session = AVCaptureSession()
@@ -296,6 +300,7 @@ final class CameraController: NSObject, @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<Data, Error>?
     private var guideInMetadata: CGRect?
+    private var sideCapture = false
     private var alignmentHandler: (@Sendable (FaceAlignment.Result) -> Void)?
 
     /// 얼굴 판정 결과 (카메라 큐에서 호출된다)
@@ -316,11 +321,12 @@ final class CameraController: NSObject, @unchecked Sendable {
         lock.withLock { guideInMetadata = metadataRect }
     }
 
-    func configure() async throws {
+    func configure(position: AVCaptureDevice.Position, side: Bool) async throws {
+        lock.withLock { sideCapture = side }
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             queue.async { [self] in
-                guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front) else {
-                    continuation.resume(throwing: CameraError.noFrontCamera)
+                guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) else {
+                    continuation.resume(throwing: CameraError.noCamera)
                     return
                 }
                 do {
@@ -340,7 +346,7 @@ final class CameraController: NSObject, @unchecked Sendable {
                     if let connection = output.connection(with: .video) {
                         if connection.isVideoMirroringSupported {
                             connection.automaticallyAdjustsVideoMirroring = false
-                            connection.isVideoMirrored = true
+                            connection.isVideoMirrored = position == .front
                         }
                         if connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
                     }
@@ -405,7 +411,7 @@ extension CameraController: AVCaptureMetadataOutputObjectsDelegate {
     /// 얼굴 사각형(메타데이터 좌표)을 같은 좌표로 바꾼 가이드와 비교한다.
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject],
                         from connection: AVCaptureConnection) {
-        let (guide, handler) = lock.withLock { (guideInMetadata, alignmentHandler) }
+        let (guide, handler, side) = lock.withLock { (guideInMetadata, alignmentHandler, sideCapture) }
         guard let guide, let handler else { return }
         let faces = metadataObjects.compactMap { $0 as? AVMetadataFaceObject }.map { face in
             FaceAlignment.Face(
@@ -414,6 +420,6 @@ extension CameraController: AVCaptureMetadataOutputObjectsDelegate {
                 roll: face.hasRollAngle ? Double(face.rollAngle) : nil
             )
         }
-        handler(FaceAlignment.evaluate(faces: faces, guide: guide))
+        handler(FaceAlignment.evaluate(faces: faces, guide: guide, side: side))
     }
 }

@@ -1,0 +1,82 @@
+{
+  "analysisId": "fictional-side-test",
+  "createdAt": "2026-11-24T07:00:00Z",
+  "status": "COMPLETED",
+  "disease": {
+    "label": "정상",
+    "labelEn": "normal",
+    "confidence": 0.7933159470558167,
+    "uncertain": false,
+    "probabilities": {},
+    "modelVersion": "dinov2_linear_875acf74c4"
+  },
+  "survey": {
+    "gender": "female",
+    "ageBand": "30s",
+    "skinType": "dry",
+    "captureView": "side",
+    "concerns": [
+      "dryness"
+    ],
+    "avoidIngredients": [],
+    "symptomProfile": {
+      "itch": "occasional",
+      "recurringRedness": false
+    }
+  },
+  "recommendationStatus": "generated",
+  "generation": {
+    "origin": "model",
+    "qualityStatus": "ok",
+    "evidenceStatus": "source_linked"
+  },
+  "recommendation": {
+    "ingredients": [
+      {
+        "name": "글리세린",
+        "priority": 1,
+        "evidence": {
+          "claimId": "E_GLY_MOIST",
+          "version": "ingredient_evidence_20261112_v2",
+          "effect": "글리세린 함유 보습 제형은 피부 수분 유지와 건조함 관리에 도움을 줄 수 있다.",
+          "limitations": "지루·건선·여드름 치료, 항균·항염, 모든 제형의 효과를 입증하지 않는다.",
+          "usageConditions": [
+            "무향의 완제품 보습제를 제품 표시대로 사용한다.",
+            "자극이 생기면 사용을 중단한다."
+          ],
+          "sources": [
+            {
+              "title": "AAD: Dermatologists' top tips for relieving dry skin",
+              "url": "https://www.aad.org/public/everyday-care/skin-care-basics/dry/dermatologists-tips-relieve-dry-skin",
+              "kind": "dermatology_society_patient_guidance",
+              "summary": "건조 피부에는 무향 크림·연고를 제안하며 글리세린과 페트롤라툼을 포함한 제형을 예로 든다. 세정 뒤 보습을 안내한다."
+            },
+            {
+              "title": "Breternitz et al. 2008, glycerol-based emollient in atopic dermatitis",
+              "url": "https://pubmed.ncbi.nlm.nih.gov/18025807/",
+              "kind": "primary_randomized_vehicle_controlled_trial",
+              "summary": "아토피 24명이 20% 글리세롤 제형과 대조 제형을 4주 비교했다. 수분·장벽 지표는 개선됐으나 홍반·SCORAD·국소 중증도는 군간 유의차가 없었다. 연구 농도·빈도를 사용자 처방으로 쓰지 않는다."
+            }
+          ]
+        }
+      },
+      {
+        "name": "세라마이드",
+        "priority": 2
+      }
+    ],
+    "routine": [
+      {
+        "step": 1,
+        "time": "anytime",
+        "action": "무향의 완제품 보습제를 제품 표시대로 사용한다."
+      },
+      {
+        "step": 2,
+        "time": "anytime",
+        "action": "자극이 생기면 사용을 중단한다."
+      }
+    ]
+  },
+  "guidance": []
+}

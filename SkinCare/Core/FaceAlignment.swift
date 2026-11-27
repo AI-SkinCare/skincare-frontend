@@ -20,6 +20,7 @@ enum FaceAlignment {
         case tooClose
         case offCenter
         case notFrontal
+        case notSide
 
         var isAligned: Bool { self == .aligned }
 
@@ -32,6 +33,7 @@ enum FaceAlignment {
             case .tooClose: "조금 뒤로 물러나 주세요"
             case .offCenter: "얼굴을 원 가운데로 맞춰 주세요"
             case .notFrontal: "정면을 봐 주세요"
+            case .notSide: "한쪽 볼과 코 윤곽이 보이게 얼굴을 돌려 주세요"
             }
         }
     }
@@ -46,12 +48,17 @@ enum FaceAlignment {
     static let maxYaw = 20.0
     static let maxRoll = 15.0
 
-    static func evaluate(faces: [Face], guide: CGRect) -> Result {
+    static func evaluate(faces: [Face], guide: CGRect, side: Bool = false) -> Result {
         guard guide.width > 0, guide.height > 0 else { return .noFace }
         guard let face = faces.first else { return .noFace }
         guard faces.count == 1 else { return .multipleFaces }
 
-        if let yaw = face.yaw, abs(yaw) > maxYaw { return .notFrontal }
+        if let yaw = face.yaw {
+            let turn = abs(yaw.truncatingRemainder(dividingBy: 360))
+            let angle = min(turn, 360 - turn)
+            if side && angle < maxYaw { return .notSide }
+            if !side && angle > maxYaw { return .notFrontal }
+        }
         if let roll = face.roll, abs(normalized(roll)) > maxRoll { return .notFrontal }
 
         let sizeRatio = ((face.rect.width * face.rect.height) / (guide.width * guide.height)).squareRoot()

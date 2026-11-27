@@ -61,6 +61,7 @@ final class SessionStore {
     /// 회원 탈퇴 (FR-AUTH-04). 성공하면 기기에 남은 토큰·설정도 지운다.
     func deleteAccount() async throws {
         _ = try await api.send(UsersAPI.deleteMe())
+        if let id = user?.id { try? DailySkinJournal.erase(userID: id) }
         await api.tokens.clear()
         LocalSettings.reset()
         state = .signedOut

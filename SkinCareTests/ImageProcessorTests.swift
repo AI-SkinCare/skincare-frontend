@@ -6,6 +6,26 @@ import Testing
 import UniformTypeIdentifiers
 
 struct ImageProcessorTests {
+    @Test func centeredSideCropUsesWholeSquareAndFloorForOddBorders() {
+        #expect(FaceGuideLayout.centeredSideCrop(in: CGSize(width: 1080, height: 1080))
+                == CGRect(x: 0, y: 0, width: 1080, height: 1080))
+        #expect(FaceGuideLayout.centeredSideCrop(in: CGSize(width: 1201, height: 800))
+                == CGRect(x: 200, y: 0, width: 800, height: 800))
+        #expect(FaceGuideLayout.centeredSideCrop(in: CGSize(width: 800, height: 1201))
+                == CGRect(x: 0, y: 200, width: 800, height: 800))
+    }
+
+    private final class TestBundle {}
+
+    @Test("같은 가상 정면·측면 사진으로 촬영 모드를 구분한다")
+    func validateCaptureAngles() throws {
+        let bundle = Bundle(for: TestBundle.self)
+        let side = try Data(contentsOf: #require(bundle.url(forResource: "fictional-side-face", withExtension: "jpg")))
+        let front = try Data(contentsOf: #require(bundle.url(forResource: "fictional-frontal-face", withExtension: "jpg")))
+        #expect(try ImageProcessor.prepareForAnalysis(side, side: true).width >= 720)
+        #expect(try ImageProcessor.prepareForAnalysis(front).width >= 720)
+        #expect(throws: ImageValidationError.sideAngle) { try ImageProcessor.prepareForAnalysis(front, side: true) }
+    }
     @Test("짧은 변 720px 미만이면 거부")
     func rejectsSmallImage() throws {
         let data = try makeJPEG(width: 700, height: 1000)
@@ -42,7 +62,7 @@ struct ImageProcessorTests {
     @Test("결과는 JPEG이고 GPS·EXIF 메타데이터가 없다 (NFR-PRI-01)")
     func stripsMetadata() throws {
         let result = try ImageProcessor.process(try makeJPEG(width: 1000, height: 1000, withGPS: true))
-        let source = try #require(CGImageSourceCreateWithData(result.jpegData as CFData, nil))
+        let source = try #require(CGImageSourceCreateWithData(result.data as CFData, nil))
         #expect(CGImageSourceGetType(source) as String? == UTType.jpeg.identifier)
         let properties = try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
         #expect(properties[kCGImagePropertyGPSDictionary] == nil)
@@ -52,13 +72,30 @@ struct ImageProcessorTests {
 
     // MARK: - 테스트 이미지
 
-    private func makeJPEG(width: Int, height: Int, orientation: Int = 1, withGPS: Bool = false) throws -> Data {
+    @Test("단색 이미지는 업로드 전에 재촬영을 안내한다")
+    func rejectsUniformImage() throws {
+        let data = try makeJPEG(width: 1000, height: 800, uniform: true)
+        #expect(throws: ImageValidationError.uniform) { try ImageProcessor.process(data) }
+    }
+
+    @Test("기하학 패턴을 정면 얼굴 분석으로 보내지 않는다")
+    func rejectsNonFaceBeforeAnalysis() throws {
+        let data = try makeJPEG(width: 900, height: 900)
+        #expect(throws: ImageValidationError.faceFraming) { try ImageProcessor.prepareForAnalysis(data) }
+    }
+
+    private func makeJPEG(width: Int, height: Int, orientation: Int = 1, withGPS: Bool = false,
+                          uniform: Bool = false) throws -> Data {
         let context = try #require(CGContext(
             data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
             space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
         ))
         context.setFillColor(CGColor(red: 0.8, green: 0.6, blue: 0.5, alpha: 1))
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        if !uniform {
+            context.setFillColor(CGColor(gray: 0.3, alpha: 1))
+            context.fill(CGRect(x: 0, y: 0, width: width / 3, height: height))
+        }
         let image = try #require(context.makeImage())
 
         var properties: [CFString: Any] = [kCGImagePropertyOrientation: orientation]

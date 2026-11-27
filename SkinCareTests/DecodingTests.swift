@@ -4,6 +4,43 @@ import Testing
 
 /// docs/new_common/api변경사항.md §1.4 예시 응답을 그대로 디코딩한다.
 struct DecodingTests {
+    @Test func symptomAnswersAreSentAndFalseIsDistinctFromMissing() throws {
+        let survey = Survey(
+            gender: .female, ageBand: .twenties,
+            symptomProfile: SymptomProfile(itch: ItchFrequency.none, recurringRedness: false, areas: [.aroundNose])
+        )
+        let request = AnalysisAPI.submit(image: Data([0xff, 0xd8, 0xff]), survey: survey)
+        guard case .multipart(let form) = request.body else {
+            Issue.record("분석 요청은 multipart여야 합니다.")
+            return
+        }
+        let payload = String(decoding: form.encoded(), as: UTF8.self)
+        #expect(payload.contains("symptomProfile"))
+        #expect(payload.contains("\"recurringRedness\":false"))
+        #expect(payload.contains("\"itch\":\"none\""))
+        #expect(payload.contains("around_nose"))
+        #expect(!payload.contains("visiblePlugs"))
+    }
+
+    @Test func oldSurveysAndUnknownCodesAreToleratedWithoutCopyingCurrentSymptoms() throws {
+        let data = Data("""
+        {"gender":"female","ageBand":"20s","symptomProfile":{
+          "itch":"future","flaking":"dry","recurringRedness":false,
+          "areas":["future_area","cheeks","cheeks"]
+        }}
+        """.utf8)
+        let survey = try JSONDecoder().decode(Survey.self, from: data)
+        #expect(survey.sanitized().symptomProfile?.itch == nil)
+        #expect(survey.sanitized().symptomProfile?.areas == [.cheeks])
+        #expect(survey.sanitized().symptomProfile?.recurringRedness == false)
+        let defaults = survey.defaultsForNewAnalysis()
+        #expect(defaults.gender == .female && defaults.ageBand == .twenties)
+        #expect(defaults.symptomProfile == nil)
+        let empty = Survey(gender: .female, ageBand: .twenties, symptomProfile: SymptomProfile())
+        let encoded = try String(decoding: JSONEncoder().encode(empty.sanitized()), as: UTF8.self)
+        #expect(!encoded.contains("symptomProfile"))
+    }
+
     private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
         try JSONCoding.decoder().decode(type, from: Data(json.utf8))
     }

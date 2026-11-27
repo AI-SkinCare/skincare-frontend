@@ -7,6 +7,16 @@ struct FaceAlignmentTests {
     /// 300×400 가이드 (화면 좌표 예시)
     private let guide = CGRect(x: 50, y: 100, width: 300, height: 400)
 
+    @Test("측면은 좌우 회전을 허용하고 정면은 측면으로 받지 않는다")
+    func sideCapture() {
+        for yaw in [-45.0, 45, 315] {
+            let subject = face(sizeRatio: 0.6, yaw: yaw)
+            #expect(FaceAlignment.evaluate(faces: [subject], guide: guide, side: true) == .aligned)
+            #expect(FaceAlignment.evaluate(faces: [subject], guide: guide) == .notFrontal)
+        }
+        #expect(FaceAlignment.evaluate(faces: [face(sizeRatio: 0.6, yaw: 0)], guide: guide, side: true) == .notSide)
+    }
+
     /// 가이드 중심 기준으로 크기 비율·이동을 준 얼굴
     private func face(sizeRatio: Double, shiftX: Double = 0, shiftY: Double = 0, yaw: Double? = nil, roll: Double? = nil)
         -> FaceAlignment.Face {

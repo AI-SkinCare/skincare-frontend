@@ -9,8 +9,16 @@ struct RecommendationView: View {
 
     var body: some View {
         Group {
-            if analysis?.status == .completed, let recommendation = analysis?.recommendation {
+            if analysis?.canDisplayRecommendation == true, let recommendation = analysis?.recommendation {
                 content(recommendation)
+            } else if let analysis, analysis.status == .withheld || analysis.generation?.preventsRecommendation == true {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        Text(AnalysisDisplay.withheldTitle(analysis.recommendationStatus)).appText(.title)
+                        ForEach(analysis.guidance, id: \.self) { Text($0).appText(.body) }
+                    }
+                    .padding(Spacing.screen)
+                }
             } else if let errorMessage {
                 ErrorStateView(message: errorMessage) { Task { await load() } }
             } else if analysis != nil {
@@ -38,9 +46,14 @@ struct RecommendationView: View {
     private func content(_ recommendation: Recommendation) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xxl) {
+                if let notice = analysis?.generation?.sourceNotice {
+                    Text(notice).appText(.bodySmall).foregroundStyle(.textMuted)
+                }
                 SummaryHeader(recommendation: recommendation)
-                IngredientsSection(ingredients: recommendation.ingredients ?? [])
+                IngredientsSection(ingredients: recommendation.ingredients ?? [],
+                                   sourceLinked: analysis?.generation?.evidenceStatus == "source_linked")
                 RoutineSection(steps: recommendation.routine ?? [])
+                if let analysis { CareGuideSection(analysis: analysis) }
                 ReasoningSection(paragraphs: recommendation.reasoning ?? [])
                 if let notes = recommendation.inputNotes, !notes.isEmpty {
                     AssumptionsSection(notes: notes)
@@ -82,6 +95,7 @@ private struct SummaryHeader: View {
 
 private struct IngredientsSection: View {
     let ingredients: [Ingredient]
+    let sourceLinked: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -105,48 +119,77 @@ private struct IngredientsSection: View {
                             Text(purpose).appText(.bodySmall).foregroundStyle(.textMuted)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
+                        DisclosureGroup("\(ingredient.name) 근거 보기") {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
+                                if sourceLinked, let evidence = ingredient.evidence, evidence.canDisplay {
+                                    Text("이번 추천에 연결된 근거").bold()
+                                    Text(evidence.effect)
+                                    Text("사용 조건").bold()
+                                    ForEach(evidence.usageConditions, id: \.self) { Text($0) }
+                                    Text("근거의 한계").bold()
+                                    Text(evidence.limitations)
+                                    ForEach(Array(evidence.sources.enumerated()), id: \.offset) { _, item in
+                                        source(item)
+                                    }
+                                } else {
+                                    Text("이 결과에는 성분별 출처가 저장되어 있지 않아요.")
+                                    if let catalog = CareCatalog.bundled,
+                                       let item = catalog.generalSources[catalog.key(ingredient.name)] {
+                                        Text("일반 참고자료").bold()
+                                        source(item)
+                                    }
+                                }
+                                NavigationLink("이 성분의 연구 문헌") {
+                                    SkinKnowledgeView(query: ingredient.name, kind: "research")
+                                }
+                            }.font(.footnote).frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                     .padding(.top, 5)
                     Spacer(minLength: 0)
                 }
                 .card(.outlined, padding: Spacing.md, radius: Radius.sm)
-                .accessibilityElement(children: .combine)
+                .accessibilityElement(children: .contain)
             }
+        }
+    }
+
+    @ViewBuilder private func source(_ item: EvidenceSource) -> some View {
+        if let url = item.webURL {
+            Link(item.title, destination: url)
+            if let summary = item.summary, !summary.isEmpty { Text(summary) }
         }
     }
 }
 
 // MARK: - 관리 루틴
 
-/// 아침/저녁 탭. daily는 두 탭 모두, weekly·anytime은 "주기 관리" 묶음 (SCR-09). 비어 있으면 숨김.
+/// daily는 아침과 저녁에 표시한다. 나머지는 서버가 지정한 사용 주기에 따라 표시한다.
 private struct RoutineSection: View {
     let steps: [RoutineStep]
     @State private var tab: RoutineTime = .morning
 
     private var morning: [RoutineStep] { steps.filter { $0.time == .morning || $0.time == .daily } }
     private var evening: [RoutineStep] { steps.filter { $0.time == .evening || $0.time == .daily } }
-    private var periodic: [RoutineStep] { steps.filter { $0.time == .weekly || $0.time == .anytime } }
 
     var body: some View {
         if !steps.isEmpty {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 SectionTitle(title: "관리 루틴")
-                PillSegmentedControl(options: [(RoutineTime.morning, "아침"), (RoutineTime.evening, "저녁")], selection: $tab)
-                RoutineTimeline(items: tab == .morning ? morning : evening)
-                    .id(tab)
-                    .transition(.opacity)
-
-                if !periodic.isEmpty {
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("주기 관리").appText(.label).foregroundStyle(.textMuted)
-                        ForEach(periodic) { item in
-                            HStack(spacing: Spacing.sm) {
-                                Image(systemName: "calendar").font(.system(size: 14)).foregroundStyle(.ink)
-                                Text(item.action).appText(.body).foregroundStyle(.ink)
-                            }
+                if !morning.isEmpty || !evening.isEmpty {
+                    PillSegmentedControl(options: [(RoutineTime.morning, "아침"), (RoutineTime.evening, "저녁")], selection: $tab)
+                    RoutineTimeline(items: tab == .morning ? morning : evening).id(tab)
+                }
+                ForEach([RoutineTime.weekly, .anytime, .unknown], id: \.self) { time in
+                    let items = steps.filter { $0.time == time }.sorted { $0.step < $1.step }
+                    if !items.isEmpty {
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            Text(time == .weekly ? "주간 관리" : time == .anytime ? "시간대 무관" : "기타 관리")
+                                .appText(.label).foregroundStyle(.textMuted)
+                            ForEach(items) { item in Text(item.action).appText(.body).foregroundStyle(.ink) }
                         }
+                        .card(.soft, padding: Spacing.md, radius: Radius.sm)
                     }
-                    .card(.soft, padding: Spacing.md, radius: Radius.sm)
                 }
             }
         }

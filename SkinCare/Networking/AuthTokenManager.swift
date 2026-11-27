@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// 액세스 토큰(메모리)과 리프레시 토큰(Keychain/쿠키)을 관리한다.
 ///
