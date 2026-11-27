@@ -24,6 +24,21 @@ struct ClassificationExplanationTests {
         #expect(try decode(nil).explanation == nil)
         let malformed = try decode(["available": "incorrect"])
         #expect(malformed.label == "아토피" && malformed.explanation == nil)
+        #expect(AnalysisDisplay.classificationReason(malformed) == "이 결과에서는 분류 후보별 점수를 비교할 수 없어요.")
+        let legacy = try JSONDecoder().decode(Disease.self, from: Data(
+            #"{"label":"아토피","labelEn":"atopic","confidence":0.9,"uncertain":false}"#.utf8
+        ))
+        #expect(legacy.confidencePoints == "90.0점" && legacy.orderedProbabilities.isEmpty)
+    }
+
+    @Test func roundedTieAndConflictingCandidatesAreHandled() {
+        let tied = Disease(label: "아토피", labelEn: .atopic, confidence: 0.5002, uncertain: true,
+                           probabilities: ["아토피": 0.5002, "정상": 0.4998, "건선": 1.4])
+        #expect(AnalysisDisplay.classificationReason(tied) == "‘아토피’ 50.0점, 다음 후보 ‘정상’ 50.0점으로 표시 점수가 같아요.")
+        #expect(tied.orderedProbabilities.map(\.label) == ["아토피", "정상"])
+        let inconsistent = Disease(label: "아토피", labelEn: .atopic, confidence: 0.4, uncertain: true,
+                                   probabilities: ["아토피": 0.4, "정상": 0.6])
+        #expect(AnalysisDisplay.classificationReason(inconsistent) == "이 결과에서는 분류 후보별 점수를 비교할 수 없어요.")
     }
 
     @Test func matchingMapCanBeDisplayed() throws {

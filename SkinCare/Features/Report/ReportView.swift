@@ -42,11 +42,11 @@ struct ReportView: View {
             VStack(alignment: .leading, spacing: Spacing.xl) {
                 ClassificationHero(analysis: analysis)
                 GuidanceBox(lines: analysis.guidance)
-                ScoreBreakdown(disease: analysis.disease)
+                ClassificationExplanationCard(disease: analysis.disease, captureView: analysis.survey?.captureView)
+                if !analysis.disease.orderedProbabilities.isEmpty { ScoreBreakdown(disease: analysis.disease) }
                 if analysis.survey?.captureView == "side" {
                     Text("측면 사진 · 시험 기능").appText(.caption)
                 }
-                ClassificationExplanationCard(disease: analysis.disease)
                 RecommendationSection(model: model, analysis: analysis)
             }
             .padding(.horizontal, Spacing.screen)
@@ -58,30 +58,39 @@ struct ReportView: View {
 
 private struct ClassificationExplanationCard: View {
     let disease: Disease
+    let captureView: String?
 
     var body: some View {
-        if let explanation = disease.explanation {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                SectionTitle(title: AppCopy.explanationTitle)
-                if let data = explanation.heatmapData(for: disease), let image = UIImage(data: data) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: AttributionSize.mapSide)
-                        .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
-                        .accessibilityLabel(AppCopy.explanationAccessibility)
-                    Text(AppCopy.explanationNotice)
-                        .appText(.caption)
-                        .foregroundStyle(.textMuted)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    Text(AppCopy.explanationUnavailable)
-                        .appText(.bodySmall)
-                        .foregroundStyle(.textMuted)
-                }
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            SectionTitle(title: AppCopy.classificationReasonTitle)
+            if let context = AnalysisDisplay.classificationContext(disease, captureView: captureView) {
+                Text(context).appText(.caption).foregroundStyle(.textMuted)
             }
-            .card(.outlined, padding: Spacing.md, radius: Radius.sm)
+            Text(AnalysisDisplay.classificationReason(disease))
+                .appText(.bodySmall)
+                .fixedSize(horizontal: false, vertical: true)
+            if disease.uncertain {
+                Text("분류가 불확실해 판단을 보류했어요.").appText(.bodySmall).foregroundStyle(.textMuted)
+            }
+            if let data = disease.explanation?.heatmapData(for: disease), let image = UIImage(data: data) {
+                Text(AppCopy.explanationTitle).appText(.link)
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: AttributionSize.mapSide)
+                    .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
+                    .accessibilityLabel(AppCopy.explanationAccessibility)
+                Text(AppCopy.explanationNotice)
+                    .appText(.caption)
+                    .foregroundStyle(.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(AppCopy.explanationUnavailable)
+                    .appText(.caption)
+                    .foregroundStyle(.textMuted)
+            }
         }
+        .card(.outlined, padding: Spacing.md, radius: Radius.sm)
     }
 }
 
@@ -93,6 +102,7 @@ private struct ClassificationHero: View {
 
     var body: some View {
         let disease = analysis.disease
+        let score = disease.confidencePoints.map { "\($0) / 100점" } ?? "점수 정보 없음"
         VStack(alignment: .leading, spacing: Spacing.md) {
             HStack(spacing: Spacing.xs) {
                 Text("이미지 분류 참고 결과").appText(.bodySmall).foregroundStyle(.textMuted)
@@ -112,7 +122,7 @@ private struct ClassificationHero: View {
             HStack(spacing: Spacing.sm) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("모델 분류 점수").appText(.caption).foregroundStyle(.textMuted)
-                    Text(disease.confidencePercent).appText(.title).foregroundStyle(.ink)
+                    Text(score).appText(.title).foregroundStyle(.ink)
                 }
                 Spacer()
             }
@@ -126,7 +136,8 @@ private struct ClassificationHero: View {
         }
         .card(.soft)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("이미지 분류 참고 결과 \(disease.label), 모델 분류 점수 \(disease.confidencePercent)\(disease.uncertain ? ", 판단 보류" : "")")
+        .accessibilityLabel("이미지 분류 참고 결과 \(disease.label), 모델 분류 점수 \(score)\(disease.uncertain ? ", 판단 보류" : "")")
+        .accessibilityIdentifier("classification-summary")
     }
 }
 
@@ -154,7 +165,7 @@ private struct GuidanceBox: View {
     }
 }
 
-/// 6종 모델 분류 점수. 표시 순서는 서버 순서(건선·아토피·여드름·정상·주사·지루), 최고 점수만 ink.
+/// 후보별 점수. 알려진 분류 라벨은 고정된 순서로 표시한다.
 private struct ScoreBreakdown: View {
     let disease: Disease
 
@@ -162,7 +173,7 @@ private struct ScoreBreakdown: View {
         let rows = disease.orderedProbabilities
         let top = rows.max { $0.score < $1.score }?.label
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            SectionTitle(title: "6종 모델 분류 점수", caption: "질환 확률이 아니에요")
+            SectionTitle(title: "후보별 분류 점수", caption: "100점 만점")
             VStack(spacing: Spacing.sm) {
                 ForEach(rows, id: \.label) { row in
                     let isTop = row.label == top
@@ -172,14 +183,14 @@ private struct ScoreBreakdown: View {
                             .foregroundStyle(isTop ? .ink : .textMuted)
                             .frame(width: 52, alignment: .leading)
                         ProgressBar(value: Int((row.score * 100).rounded()), color: isTop ? .ink : .hairline, height: 8)
-                        Text(Disease.percent(row.score))
+                        Text(Disease.points(row.score) ?? "")
                             .appText(.caption)
                             .foregroundStyle(isTop ? .ink : .textMuted)
-                            .frame(width: 40, alignment: .trailing)
+                            .frame(width: 60, alignment: .trailing)
                     }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(row.label)
-                    .accessibilityValue("모델 분류 점수 \(Disease.percent(row.score))")
+                    .accessibilityValue("모델 분류 점수 \(Disease.points(row.score) ?? "")")
                 }
             }
             .card(.outlined, padding: Spacing.md, radius: Radius.sm)

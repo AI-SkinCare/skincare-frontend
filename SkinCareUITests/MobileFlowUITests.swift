@@ -78,6 +78,21 @@ final class MobileFlowUITests: XCTestCase {
     }
 
     @MainActor
+    func testShowsClassificationScoreAndExplanation() {
+        let app = launch("report-uncertain")
+        XCTAssertTrue(app.navigationBars["분석 결과"].waitForExistence(timeout: 15))
+        let summary = app.descendants(matching: .any).matching(identifier: "classification-summary").firstMatch
+        XCTAssertTrue(summary.waitForExistence(timeout: 5))
+        XCTAssertTrue(summary.label.contains("55.0점 / 100점"))
+        let reason = app.staticTexts["왜 이렇게 분류했나요?"].firstMatch
+        XCTAssertTrue(reason.waitForExistence(timeout: 5))
+        let detail = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "46.0점 차이")).firstMatch
+        XCTAssertTrue(detail.exists)
+        XCTAssertTrue(app.staticTexts["분류가 불확실해 판단을 보류했어요."].exists)
+        XCTAssertTrue(app.staticTexts["이 결과에는 표시할 수 있는 참고 영역 지도가 없어요."].exists)
+    }
+
+    @MainActor
     func testWithheldReportHasNoRecommendationLink() {
         let app = launch("report-no-concern")
         XCTAssertTrue(app.navigationBars["분석 결과"].waitForExistence(timeout: 15))

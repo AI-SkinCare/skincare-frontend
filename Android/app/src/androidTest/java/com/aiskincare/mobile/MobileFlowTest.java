@@ -60,7 +60,11 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
         MainActivity app = getActivity();
         onUi(() -> app.openReport(item));
         await("측면 사진 · 시험 기능", 3000);
-        await("79%", 3000);
+        await("79.3점 / 100점", 3000);
+        await("왜 이렇게 분류했나요?", 3000);
+        await("측면 사진 · DINOv2", 3000);
+        await("‘정상’ 79.3점, 다음 후보 ‘아토피’ 12.0점으로 67.3점 차이가 났어요.", 3000);
+        await("이 결과에는 표시할 수 있는 참고 영역 지도가 없어요.", 3000);
         onUi(() -> click("추천 자세히 보기"));
         await("글리세린", 3000);
         await("세라마이드", 3000);
@@ -77,6 +81,19 @@ public final class MobileFlowTest extends ActivityInstrumentationTestCase2<MainA
         await("자극이 생기면 사용을 중단한다.", 3000);
         assertFalse(hasText("아침"));
         assertFalse(hasText("주간 관리"));
+    }
+    public void testClassificationScoresHandleRoundedTieAndMissingData() throws Exception {
+        JSONObject probabilities = new JSONObject().put("정상", .5002).put("아토피", .4998).put("건선", 1.4);
+        JSONObject disease = new JSONObject().put("label", "정상").put("confidence", .5002)
+                .put("probabilities", probabilities);
+        var candidates = ClassificationDisplay.candidates(disease);
+        assertEquals(2, candidates.size());
+        assertEquals("‘정상’ 50.0점, 다음 후보 ‘아토피’ 50.0점으로 표시 점수가 같아요.",
+                ClassificationDisplay.reason(disease, candidates));
+        assertNull(ClassificationDisplay.points(1.2));
+        assertNull(ClassificationDisplay.points(Double.NaN));
+        disease.put("label", "아토피").put("confidence", .4998);
+        assertEquals("이 결과에서는 분류 후보별 점수를 비교할 수 없어요.", ClassificationDisplay.reason(disease, candidates));
     }
     public void testSideFaceAcceptsEitherDirectionAndRejectsFrontal() throws Exception {
         try (var side = getInstrumentation().getContext().getAssets().open("fictional-side-face.jpg")) {

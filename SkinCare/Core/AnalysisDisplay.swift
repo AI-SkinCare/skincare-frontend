@@ -28,4 +28,34 @@ enum AnalysisDisplay {
         default: "추천을 제공하지 않았어요"
         }
     }
+
+    static func classificationReason(_ disease: Disease) -> String {
+        let unavailable = "이 결과에서는 분류 후보별 점수를 비교할 수 없어요."
+        guard let score = disease.probabilities[disease.label],
+              let selected = Disease.scoreTenths(score), selected == Disease.scoreTenths(disease.confidence),
+              let runnerUp = disease.orderedProbabilities.filter({ $0.label != disease.label }).max(by: { $0.score < $1.score }),
+              score >= runnerUp.score, let other = Disease.scoreTenths(runnerUp.score) else { return unavailable }
+
+        let result = "‘\(disease.label)’ \(Disease.pointsFromTenths(selected)), 다음 후보 ‘\(runnerUp.label)’ \(Disease.pointsFromTenths(other))"
+        if selected == other { return result + "으로 표시 점수가 같아요." }
+        return result + "으로 \(Disease.pointsFromTenths(selected - other)) 차이가 났어요."
+    }
+
+    static func classificationContext(_ disease: Disease, captureView: String?) -> String? {
+        let photo: String? = switch captureView {
+        case "front": "정면 사진"
+        case "side": "측면 사진"
+        default: nil
+        }
+        let version = disease.modelVersion ?? ""
+        let model: String? = if version.hasPrefix("densenet121") {
+            "DenseNet121"
+        } else if version.hasPrefix("dinov2") {
+            "DINOv2"
+        } else {
+            nil
+        }
+        let parts = [photo, model].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
 }

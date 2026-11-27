@@ -107,7 +107,7 @@ struct Disease: Decodable, Sendable, Equatable {
     /// 분류 라벨(한글) — 건선·아토피·여드름·정상·주사·지루. 화면에 그대로 표시한다.
     let label: String
     let labelEn: DiseaseClass
-    /// 모델 분류 점수 0–1. 질환 확률이 아니다 — 화면엔 백분율 + "모델 분류 점수"로 표기
+    /// 모델 분류 점수 0–1. 앱에서는 100점 만점으로 표시한다.
     let confidence: Double
     /// 점수가 AI 임계값(0.6) 미만이면 true
     let uncertain: Bool
@@ -138,26 +138,35 @@ struct Disease: Decodable, Sendable, Equatable {
         labelEn = try container.decode(DiseaseClass.self, forKey: .labelEn)
         confidence = try container.decode(Double.self, forKey: .confidence)
         uncertain = try container.decode(Bool.self, forKey: .uncertain)
-        probabilities = try container.decode([String: Double].self, forKey: .probabilities)
+        probabilities = (try? container.decode([String: Double].self, forKey: .probabilities)) ?? [:]
         modelVersion = try? container.decodeIfPresent(String.self, forKey: .modelVersion)
         // A malformed optional visualization must not hide the classification.
         explanation = try? container.decodeIfPresent(ClassificationExplanation.self, forKey: .explanation)
     }
 
-    /// "90%"
-    var confidencePercent: String { Self.percent(confidence) }
+    var confidencePoints: String? { Self.points(confidence) }
 
     /// 표시 순서(건선·아토피·여드름·정상·주사·지루)대로 정렬한 점수. 모르는 라벨은 뒤에 붙인다.
     var orderedProbabilities: [(label: String, score: Double)] {
-        let known = DiseaseClass.displayOrder.compactMap { key in probabilities[key].map { (key, $0) } }
-        let extra = probabilities.filter { !DiseaseClass.displayOrder.contains($0.key) }
-            .sorted { $0.value > $1.value }
+        let scores = probabilities.filter { Self.scoreTenths($0.value) != nil }
+        let known = DiseaseClass.displayOrder.compactMap { key in scores[key].map { (key, $0) } }
+        let extra = scores.filter { !DiseaseClass.displayOrder.contains($0.key) }
+            .sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
             .map { ($0.key, $0.value) }
         return known + extra
     }
 
-    static func percent(_ value: Double) -> String {
-        "\(Int((min(max(value, 0), 1) * 100).rounded()))%"
+    static func scoreTenths(_ value: Double) -> Int? {
+        guard value.isFinite, (0...1).contains(value) else { return nil }
+        return Int((value * 1000).rounded())
+    }
+
+    static func points(_ value: Double) -> String? {
+        scoreTenths(value).map(pointsFromTenths)
+    }
+
+    static func pointsFromTenths(_ tenths: Int) -> String {
+        "\(tenths / 10).\(tenths % 10)점"
     }
 }
 
