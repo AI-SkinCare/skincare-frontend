@@ -1,0 +1,178 @@
+{
+  "care": {
+    "여드름": {
+      "body": "세안 뒤 건조함이 느껴지면 모공을 막지 않는다고 표시된 보습제를 살펴보세요.",
+      "source": "https://www.aad.org/public/diseases/acne/skin-care/moisturizer"
+    },
+    "주사": {
+      "body": "세안할 때 손끝으로 부드럽게 씻고 미지근한 물로 충분히 헹궈 보세요.",
+      "source": "https://www.aad.org/public/diseases/rosacea/triggers/tips"
+    },
+    "아토피": {
+      "body": "피부가 건조하고 가려울 때는 씻은 뒤 물기가 조금 남았을 때 무향 보습제를 발라 보세요.",
+      "source": "https://www.aad.org/public/diseases/eczema/insider/moisturizer-reduce-flares"
+    },
+    "건선": {
+      "body": "피부가 건조하고 각질이 보일 때는 뜨거운 물이나 스크럽을 피하고 가볍게 두드려 말려 보세요.",
+      "source": "https://www.aad.org/public/diseases/psoriasis/skin-care/baths-showers"
+    },
+    "지루": {
+      "body": "세정제가 피부에 남지 않도록 충분히 헹구고, 향이 없는 순한 세정제를 선택해 보세요.",
+      "source": "https://www.aad.org/public/diseases/a-z/seborrheic-dermatitis-self-care"
+    }
+  },
+  "diet": {
+    "general": {
+      "body": "평소 식사에 채소, 콩류, 통곡물을 다양하게 포함해 보세요. 특정 피부질환에 대한 처방이 아닌 일반 식생활 안내예요.",
+      "source": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet"
+    },
+    "여드름": {
+      "body": "단 음료를 자주 마신다면 한 번은 물로 바꿔 보고 피부 변화를 기록해 보세요. 저혈당 식사와 여드름의 관계는 연구 결과가 일치하지 않아요.",
+      "source": "https://www.aad.org/public/diseases/acne/causes/diet"
+    },
+    "주사": {
+      "body": "뜨거운 음료를 마신 뒤 얼굴이 자주 달아오른다면 식혀서 마셔 보고 차이를 기록해 보세요.",
+      "source": "https://www.aad.org/public/diseases/rosacea/triggers/prevent"
+    }
+  },
+  "aliases": {
+    "글리세린": [
+      "글리세롤",
+      "글리세린",
+      "glycerin",
+      "glycerol"
+    ],
+    "세라마이드": [
+      "세라마이드",
+      "세라마이드엔피",
+      "ceramide",
+      "ceramidenp",
+      "ceramides"
+    ],
+    "히알루론산": [
+      "hyaluronicacid",
+      "히알루론산"
+    ],
+    "스쿠알란": [
+      "squalane"
+    ],
+    "징크옥사이드": [
+      "산화아연",
+      "징크옥사이드",
+      "zincoxide"
+    ],
+    "향료": [
+      "fragrance",
+      "parfum"
+    ],
+    "레티놀": [
+      "retinol"
+    ],
+    "판테놀": [
+      "panthenol"
+    ],
+    "나이아신아마이드": [
+      "나이아신아마이드",
+      "나이아신아미드",
+      "니아신아마이드",
+      "niacinamide",
+      "nicotinamide"
+    ],
+    "페트롤라툼": [
+      "바셀린",
+      "페트롤라텀",
+      "페트롤라툼",
+      "페트롤레움젤리",
+      "페트롤리움젤리",
+      "petrolatum",
+      "petroleumjelly"
+    ],
+    "티타늄디옥사이드": [
+      "이산화티타늄",
+      "티타늄디옥사이드",
+      "titaniumdioxide"
+    ]
+  },
+  "products": [
+    {
+      "name": "Vanicream Daily Facial Moisturizer",
+      "category": "얼굴 보습제",
+      "matches": [
+        "글리세린",
+        "세라마이드",
+        "히알루론산",
+        "스쿠알란"
+      ],
+      "absent": [
+        "향료",
+        "레티놀",
+        "판테놀",
+        "나이아신아마이드",
+        "징크옥사이드"
+      ],
+      "source": "https://www.vanicream.com/product/vanicream-daily-facial-moisturizer",
+      "labelNames": {
+        "글리세린": "glycerin",
+        "세라마이드": "ceramide EOP, NG, NP, AS, AP",
+        "히알루론산": "hyaluronic acid",
+        "스쿠알란": "squalane"
+      }
+    },
+    {
+      "name": "Vanicream Facial Moisturizer Broad Spectrum SPF 30",
+      "category": "자외선 차단제",
+      "matches": [
+        "징크옥사이드"
+      ],
+      "absent": [
+        "향료",
+        "레티놀",
+        "판테놀",
+        "나이아신아마이드",
+        "히알루론산"
+      ],
+      "source": "https://www.vanicream.com/product/facial-moisturizer-with-spf",
+      "labelNames": {
+        "징크옥사이드": "zinc oxide"
+      }
+    }
+  ],
+  "generalSources": {
+    "글리세린": {
+      "title": "Breternitz et al. 2008, glycerol-based emollient in atopic dermatitis",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/18025807/",
+      "kind": "primary_randomized_vehicle_controlled_trial",
+      "summary": "아토피 24명이 20% 글리세롤 제형과 대조 제형을 4주 비교했다. 수분·장벽 지표는 개선됐으나 홍반·SCORAD·국소 중증도는 군간 유의차가 없었다. 연구 농도·빈도를 사용자 처방으로 쓰지 않는다."
+    },
+    "세라마이드": {
+      "title": "Spada et al. 2021, ceramide-dominant cream and cleanser regimen",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/33984185/",
+      "kind": "primary_randomized_formulation_trial",
+      "summary": "성인 습진 100명을 세라마이드 중심 크림·세정제와 대조 제형으로 28일 비교했다. 수분·수분 손실 지표는 개선됐으나 EASI 중증도 변화는 군간 유의차가 없었다. 제조사 관련 연구이며 단일 성분 효과를 분리하지 못한다."
+    },
+    "페트롤라툼": {
+      "title": "AAD: 5 ways to use petroleum jelly for skin care",
+      "url": "https://www.aad.org/public/everyday-care/skin-care-secrets/routine/petroleum-jelly",
+      "kind": "dermatology_society_patient_guidance",
+      "summary": "건조 피부의 수분 보존에 사용하며 여드름이 잘 나는 얼굴에는 사용을 피하도록 안내한다."
+    },
+    "징크옥사이드": {
+      "title": "AAD: Rosacea skin care tips",
+      "url": "https://www.aad.org/public/diseases/rosacea/triggers/tips",
+      "kind": "dermatology_society_patient_guidance",
+      "summary": "주사 피부에는 무향 제품, 세정 후 마른 피부에 보습, 광범위 SPF30 이상 내수성 선크림을 안내한다. 자극이 있는 선크림의 대안으로 산화아연·이산화티타늄 함유 제형을 제시한다."
+    },
+    "티타늄디옥사이드": {
+      "title": "AAD: Rosacea skin care tips",
+      "url": "https://www.aad.org/public/diseases/rosacea/triggers/tips",
+      "kind": "dermatology_society_patient_guidance",
+      "summary": "주사 피부에는 무향 제품, 세정 후 마른 피부에 보습, 광범위 SPF30 이상 내수성 선크림을 안내한다. 자극이 있는 선크림의 대안으로 산화아연·이산화티타늄 함유 제형을 제시한다."
+    },
+    "나이아신아마이드": {
+      "title": "Draelos et al. 2005, niacinamide-containing moisturizer in rosacea",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/16209160/",
+      "kind": "primary_small_formulation_study",
+      "summary": "주사 대상자 50명이 나이아신아마이드 함유 보습제를 4주 사용한 연구다. 얼굴 무처치 대조가 아닌 팔 부위 비교를 포함하며 초록에 농도와 정량 결과가 없다. 단일 성분 효과·치료·미백 효과는 확정하지 않는다."
+    }
+  }
+}

@@ -1,0 +1,8 @@
+#include "Base.xcconfig"
+
+// 운영 백엔드 (Mac mini → Cloudflare 터널). 백엔드 docs/deploy.md
+API_BASE_URL = https:/$()/skincare.doi2.my/api/v1
+
+INFOPLIST_FILE = Config/Info-Release.plist
+
+#include? "Local.xcconfig"
