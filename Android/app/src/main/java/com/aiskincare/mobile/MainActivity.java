@@ -1331,38 +1331,25 @@ public final class MainActivity extends Activity {
             }
             result.addView(caption);
             JSONObject recordedSurvey = value.optJSONObject("survey");
-            if (recordedSurvey != null && "side".equals(recordedSurvey.optString("captureView")))
+            String captureView = recordedSurvey == null ? "" : recordedSurvey.optString("captureView");
+            if ("side".equals(captureView))
                 label(result, "측면 사진 · 시험 기능", 14, MUTED, 500, 0, 5);
             label(result, disease.optString("label"), 44, INK, 700, 0, 14);
             label(result, "모델 분류 점수", 13, MUTED, 500, 0, 3);
-            double score = disease.optDouble("confidence", 0);
-            label(result, percent(score), 24, INK, 700, 0, 8);
+            String score = ClassificationDisplay.points(disease.optDouble("confidence", Double.NaN));
+            label(result, score == null ? "점수 정보 없음" : score + " / 100점", 24, INK, 700, 0, 8);
             if (disease.optBoolean("uncertain"))
                 label(result, "판단 보류 · 분류 점수가 낮아 결과가 불확실해요.", 14, MUTED, 500, 10, 0);
-            JSONObject scores = disease.optJSONObject("probabilities");
-            if (scores != null && scores.length() > 0) {
-                LinearLayout breakdown = disclosure(page, "6종 모델 분류 점수");
-                label(breakdown, "질환 확률이 아니에요.", 13, MUTED, 400, 4, 7);
-                List<String> labels = new ArrayList<>(java.util.Arrays.asList("건선", "아토피", "여드름", "정상", "주사", "지루"));
-                scores.keys().forEachRemaining(key -> { if (!labels.contains(key)) labels.add(key); });
-                for (String key : labels) {
-                    if (!scores.has(key)) continue;
-                    double amount = scores.optDouble(key, 0);
-                    label(breakdown, key + "   " + percent(amount), 14, INK, 500, 8, 6);
-                    meter(breakdown, amount);
-                }
-            }
             label(page, "이미지 분류 참고 결과이며 의학적 진단이 아닙니다.", 13, MUTED, 400, 5, 13);
-            android.graphics.Bitmap map = heatmap(disease);
-            if (map != null) {
-                label(page, "분류기가 참고한 영역", 20, INK, 700, 4, 9);
-                LinearLayout explanation = card(page, true, 16);
-                ImageView image = new ImageView(this);
-                image.setImageBitmap(map);
-                image.setContentDescription("분류기가 참고한 영역");
-                explanation.addView(image, -1, dp(144));
-                label(explanation, "밝은 부분은 분류기가 더 많이 참고한 영역이에요. 병변의 경계를 표시한 그림은 아니에요.",
-                        14, MUTED, 400, 9, 0);
+            var candidates = ClassificationDisplay.candidates(disease);
+            classificationExplanation(disease, captureView, candidates);
+            if (!candidates.isEmpty()) {
+                LinearLayout breakdown = disclosure(page, "후보별 분류 점수");
+                label(breakdown, "100점 만점", 13, MUTED, 400, 4, 7);
+                for (var candidate : candidates) {
+                    label(breakdown, candidate.label() + "   " + ClassificationDisplay.points(candidate.score()), 14, INK, 500, 8, 6);
+                    meter(breakdown, candidate.score());
+                }
             }
         }
         lines(page, value.optJSONArray("guidance"));
@@ -1415,8 +1402,26 @@ public final class MainActivity extends Activity {
         button("새 사진 분석", false, this::startCapture);
     }
 
-    private String percent(double score) {
-        return Math.round(score * 100) + "%";
+    private void classificationExplanation(JSONObject disease, String captureView, List<ClassificationDisplay.Candidate> candidates) {
+        LinearLayout explanation = card(page, true, 16);
+        label(explanation, "왜 이렇게 분류했나요?", 20, INK, 700, 0, 8);
+        String context = ClassificationDisplay.context(disease, captureView);
+        if (!context.isEmpty()) label(explanation, context, 13, MUTED, 500, 0, 6);
+        label(explanation, ClassificationDisplay.reason(disease, candidates), 15, INK, 400, 0, 8);
+        if (disease.optBoolean("uncertain"))
+            label(explanation, "분류가 불확실해 판단을 보류했어요.", 14, MUTED, 400, 0, 8);
+        android.graphics.Bitmap map = heatmap(disease);
+        if (map == null) {
+            label(explanation, "이 결과에는 표시할 수 있는 참고 영역 지도가 없어요.", 13, MUTED, 400, 0, 0);
+            return;
+        }
+        label(explanation, "모델이 참고한 영역", 14, INK, 600, 3, 7);
+        ImageView image = new ImageView(this);
+        image.setImageBitmap(map);
+        image.setContentDescription("모델 분류에 영향을 준 영역의 밝기 지도");
+        explanation.addView(image, -1, dp(144));
+        label(explanation, "밝을수록 모델 분류 점수에 영향을 준 영역이에요. 원본 사진을 포함하지 않은 참고 지도이며, 병변 위치나 중증도를 나타내지 않아요.",
+                13, MUTED, 400, 9, 0);
     }
 
     private void meter(LinearLayout owner, double score) {
